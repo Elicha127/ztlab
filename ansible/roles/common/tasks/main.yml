@@ -1,0 +1,26 @@
+- name: update apt cache
+  apt:
+    update_cache: yes
+    upgrade: dist
+
+- name: ensure basic packages installed
+  apt:
+    name:
+      - htop
+      - curl
+      - wget
+      - unzip
+      - apt-transport-https
+    state: present
+
+- name: ensure python3 and pip installed
+  apt:
+    name:
+      - python3
+      - python3-pip
+    state: present
+
+- name: ensure openssh-server installed
+  apt:
+    name: openssh-server
+    state: present

@@ -1,0 +1,14 @@
+- hosts: all
+  become: true
+  roles:
+    - common
+
+- hosts: monitoring
+  become: true
+  roles:
+    - monitoring
+
+- hosts: monitoring
+  become: true
+  roles:
+    - monitoring-stack

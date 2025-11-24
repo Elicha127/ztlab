@@ -1,0 +1,14 @@
+#cloud-config
+hostname: gt-voip
+users:
+  - name: ubuntu
+    gecos: Admin
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    ssh_authorized_keys:
+      - "{{ SSH_PUB_KEY_PLACEHOLDER }}"
+package_update: true
+packages:
+  - asterisk
+runcmd:
+  - [ sh, -lc, 'systemctl enable asterisk' ]
+  - [ sh, -lc, 'systemctl start asterisk' ]

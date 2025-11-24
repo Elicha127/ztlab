@@ -1,0 +1,74 @@
+---
+- name: Ensure /usr/local/bin exists
+  file:
+    path: /usr/local/bin
+    state: directory
+    mode: '0755'
+
+- name: download node_exporter tarball (x86_64)
+  get_url:
+    url: https://github.com/prometheus/node_exporter/releases/download/v1.7.1/node_exporter-1.7.1.linux-amd64.tar.gz
+    dest: /tmp/node_exporter.tar.gz
+    mode: '0644'
+  when: ansible_architecture == 'x86_64'
+
+- name: extract node_exporter
+  unarchive:
+    src: /tmp/node_exporter.tar.gz
+    dest: /usr/local/bin/
+    remote_src: yes
+  when: ansible_architecture == 'x86_64'
+
+- name: move node_exporter binary to /usr/local/bin
+  command: mv /usr/local/bin/node_exporter-*/node_exporter /usr/local/bin/node_exporter creates=/usr/local/bin/node_exporter
+  when: ansible_architecture == 'x86_64'
+
+- name: add node_exporter user
+  user:
+    name: node_exporter
+    shell: /usr/sbin/nologin
+    system: yes
+    create_home: no
+
+- name: set ownership of binary
+  file:
+    path: /usr/local/bin/node_exporter
+    owner: node_exporter
+    group: node_exporter
+    mode: '0755'
+  when: ansible_architecture == 'x86_64'
+
+- name: create node_exporter systemd service
+  copy:
+    dest: /etc/systemd/system/node_exporter.service
+    content: |
+      [Unit]
+      Description=Node Exporter
+      After=network.target
+
+      [Service]
+      User=node_exporter
+      Group=node_exporter
+      ExecStart=/usr/local/bin/node_exporter
+
+      [Install]
+      WantedBy=multi-user.target
+  notify: reload systemd
+
+- name: enable and start node_exporter
+  systemd:
+    name: node_exporter
+    enabled: yes
+    state: started
+
+- name: clean tmp file
+  file:
+    path: /tmp/node_exporter.tar.gz
+    state: absent
+
+# handlers
+handlers:
+  - name: reload systemd
+    systemd:
+      daemon_reload: yes
+
