@@ -1,3 +1,4 @@
+# roles/monitoring/tasks/node_exporter.yml
 ---
 - name: Ensure /usr/local/bin exists
   file:
@@ -20,7 +21,9 @@
   when: ansible_architecture == 'x86_64'
 
 - name: move node_exporter binary to /usr/local/bin
-  command: mv /usr/local/bin/node_exporter-*/node_exporter /usr/local/bin/node_exporter creates=/usr/local/bin/node_exporter
+  command: mv /usr/local/bin/node_exporter-*/node_exporter /usr/local/bin/node_exporter
+  args:
+    creates: /usr/local/bin/node_exporter
   when: ansible_architecture == 'x86_64'
 
 - name: add node_exporter user
@@ -65,10 +68,3 @@
   file:
     path: /tmp/node_exporter.tar.gz
     state: absent
-
-# handlers
-handlers:
-  - name: reload systemd
-    systemd:
-      daemon_reload: yes
-

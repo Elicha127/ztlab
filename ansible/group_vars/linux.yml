@@ -1,0 +1,6 @@
+# ansible/group_vars/linux.yml
+ansible_connection: ssh
+ansible_python_interpreter: /usr/bin/python3
+ansible_become: yes
+ansible_become_method: sudo
+ansible_become_user: root

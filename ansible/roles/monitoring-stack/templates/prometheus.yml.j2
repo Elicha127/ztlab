@@ -1,0 +1,35 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+            - 'alertmanager:9093'
+
+rule_files:
+  - "alert_rules.yml"
+
+scrape_configs:
+  # Exporters Linux (Node Exporter sur port 9100)
+  - job_name: 'node_exporter'
+    static_configs:
+      - targets:
+{% for group in ['controller', 'bastion', 'apps', 'monitoring', 'client', 'linux'] %}
+{%   if group in groups %}
+{%     for host in groups[group] %}
+          - '{{ hostvars[host].ansible_host }}:9100'
+{%     endfor %}
+{%   endif %}
+{% endfor %}
+
+  # Exporters Windows (Windows Exporter sur port 9182)
+  - job_name: 'windows_exporter'
+    static_configs:
+      - targets:
+{% if 'windows' in groups %}
+{%   for host in groups['windows'] %}
+          - '{{ hostvars[host].ansible_host }}:9182'
+{%   endfor %}
+{% endif %}

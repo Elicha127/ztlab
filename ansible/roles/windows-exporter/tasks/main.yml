@@ -1,0 +1,32 @@
+---
+- name: Create Temp folder
+  win_file:
+    path: C:\Temp
+    state: directory
+
+- name: Download Windows Exporter MSI
+  win_get_url:
+    url: https://github.com/prometheus-community/windows_exporter/releases/download/v0.25.1/windows_exporter-0.25.1-amd64.msi
+    dest: C:\Temp\windows_exporter.msi
+
+- name: Install Windows Exporter
+  win_package:
+    path: C:\Temp\windows_exporter.msi
+    state: present
+    arguments: ENABLED_COLLECTORS=cpu,cs,logical_disk,net,os,system,memory
+
+- name: Ensure Windows Exporter service is started
+  win_service:
+    name: windows_exporter
+    start_mode: auto
+    state: started
+
+- name: Open firewall port 9182
+  win_firewall_rule:
+    name: "Windows Exporter"
+    localport: 9182
+    action: allow
+    direction: in
+    protocol: tcp
+    state: present
+    enabled: yes
