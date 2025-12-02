@@ -3,8 +3,8 @@
 domain_name: "germe-tech.local"
 domain_netbios_name: "GERME-TECH"
 safe_mode_password: "GermeTech@DSRM2024!"  # Mot de passe DSRM (à changer)
-forest_mode: "Win2019"  # Windows Server 2016+
-domain_mode: "Win2019"
+forest_mode: "WinThreshold"  # Windows Server 2016+
+domain_mode: "WinThreshold"
 
 # Configuration réseau
 static_ip: "192.168.30.10"

@@ -13,7 +13,7 @@
 - name: Configure static IP address
   win_shell: |
     $adapter = Get-NetAdapter | Where-Object {$_.Status -eq "Up"} | Select-Object -First 1
-    New-NetIPAddress -InterfaceIndex $adapter.ifIndex -IPAddress {{ static_ip }} -PrefixLength {{ subnet_mask | ipaddr('prefix') }} -DefaultGateway {{ default_gateway }}
+    New-NetIPAddress -InterfaceIndex $adapter.ifIndex -IPAddress {{ static_ip }} -PrefixLength {{ subnet_mask | ansible.utils.ipaddr('prefix') }} -DefaultGateway {{ default_gateway }}
     Set-DnsClientServerAddress -InterfaceIndex $adapter.ifIndex -ServerAddresses {{ dns_servers | join(',') }}
   args:
     executable: powershell
