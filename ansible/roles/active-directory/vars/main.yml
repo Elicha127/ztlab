@@ -1,0 +1,33 @@
+---
+# Variables pour Active Directory
+domain_name: "germe-tech.local"
+domain_netbios_name: "GERME-TECH"
+safe_mode_password: "GermeTech@DSRM2024!"  # Mot de passe DSRM (à changer)
+forest_mode: "Win2019"  # Windows Server 2016+
+domain_mode: "Win2019"
+
+# Configuration réseau
+static_ip: "192.168.30.10"
+subnet_mask: "255.255.255.0"
+default_gateway: "192.168.30.1"
+dns_servers:
+  - "127.0.0.1"
+  - "8.8.8.8"
+
+# Configuration DNS
+reverse_zone: "30.168.192.in-addr.arpa"
+dns_records:
+  - name: "zt-controller"
+    ip: "192.168.30.5"
+  - name: "zt-app"
+    ip: "192.168.30.6"
+  - name: "zt-monitor"
+    ip: "192.168.30.7"
+  - name: "zt-bastion"
+    ip: "192.168.30.8"
+  - name: "gt-mail"
+    ip: "192.168.40.10"
+  - name: "gt-voip"
+    ip: "192.168.40.20"
+  - name: "client-win"
+    ip: "192.168.30.4"

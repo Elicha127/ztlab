@@ -1,0 +1,28 @@
+---
+- name: Configure gt-dc as Active Directory Domain Controller
+  hosts: gt-dc
+  gather_facts: yes
+  
+  tasks:
+    - name: Include Active Directory role
+      include_role:
+        name: active-directory
+      vars:
+        domain_name: "germe-tech.local"
+        domain_netbios_name: "GERME-TECH"
+        safe_mode_password: "GermeTech@DSRM2024!"
+        static_ip: "192.168.30.10"
+        subnet_mask: "255.255.255.0"
+        default_gateway: "192.168.30.1"
+
+    - name: Deploy Windows Exporter
+      include_role:
+        name: windows-exporter
+
+- name: Update Prometheus configuration after AD deployment
+  hosts: monitoring
+  become: yes
+  tasks:
+    - name: Trigger Prometheus config regeneration
+      include_role:
+        name: monitoring-stack

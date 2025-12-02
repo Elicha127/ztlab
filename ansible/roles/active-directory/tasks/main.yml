@@ -1,0 +1,208 @@
+---
+- name: Set computer name to gt-dc
+  win_hostname:
+    name: "gt-dc"
+  register: hostname_result
+
+- name: Reboot if hostname changed
+  win_reboot:
+    reboot_timeout: 600
+    post_reboot_delay: 180
+  when: hostname_result.reboot_required
+
+- name: Configure static IP address
+  win_shell: |
+    $adapter = Get-NetAdapter | Where-Object {$_.Status -eq "Up"} | Select-Object -First 1
+    New-NetIPAddress -InterfaceIndex $adapter.ifIndex -IPAddress {{ static_ip }} -PrefixLength {{ subnet_mask | ipaddr('prefix') }} -DefaultGateway {{ default_gateway }}
+    Set-DnsClientServerAddress -InterfaceIndex $adapter.ifIndex -ServerAddresses {{ dns_servers | join(',') }}
+  args:
+    executable: powershell
+  ignore_errors: yes
+
+- name: Install DNS Server feature
+  win_feature:
+    name: DNS
+    state: present
+    include_management_tools: yes
+  register: dns_install
+
+- name: Install AD Domain Services feature
+  win_feature:
+    name: AD-Domain-Services
+    state: present
+    include_management_tools: yes
+  register: adds_install
+
+- name: Reboot after feature installation
+  win_reboot:
+    reboot_timeout: 600
+    post_reboot_delay: 180
+  when: dns_install.reboot_required or adds_install.reboot_required
+
+- name: Check if domain already exists
+  win_shell: |
+    try {
+      Get-ADDomain -ErrorAction Stop | Out-Null
+      Write-Output "exists"
+    } catch {
+      Write-Output "not_exists"
+    }
+  args:
+    executable: powershell
+  register: domain_check
+  changed_when: false
+  failed_when: false
+
+- name: Promote server to Domain Controller
+  win_shell: |
+    Install-ADDSForest `
+      -DomainName "{{ domain_name }}" `
+      -DomainNetbiosName "{{ domain_netbios_name }}" `
+      -ForestMode "{{ forest_mode }}" `
+      -DomainMode "{{ domain_mode }}" `
+      -InstallDns `
+      -SafeModeAdministratorPassword (ConvertTo-SecureString "{{ safe_mode_password }}" -AsPlainText -Force) `
+      -Force `
+      -NoRebootOnCompletion
+  args:
+    executable: powershell
+  when: domain_check is defined and domain_check.stdout is defined and (domain_check.stdout | trim == "not_exists")
+  register: promote_dc
+
+- name: Reboot after domain controller promotion
+  win_reboot:
+    reboot_timeout: 900
+    post_reboot_delay: 120
+  when: promote_dc.changed
+
+- name: Wait for AD Web Services to be available
+  win_service:
+    name: ADWS
+    state: started
+  register: adws_status
+  until: adws_status.state == "running"
+  retries: 10
+  delay: 30
+
+- name: Create reverse lookup zone
+  win_shell: |
+    $zone = "{{ reverse_zone }}"
+    $existingZone = Get-DnsServerZone -Name $zone -ErrorAction SilentlyContinue
+    if (-not $existingZone) {
+      Add-DnsServerPrimaryZone -NetworkID "192.168.30.0/24" -ReplicationScope "Forest"
+      Write-Output "Created"
+    } else {
+      Write-Output "Already exists"
+    }
+  args:
+    executable: powershell
+  register: reverse_zone_result
+
+- name: Add DNS A records for infrastructure servers
+  win_shell: |
+    $zone = "{{ domain_name }}"
+    $name = "{{ item.name }}"
+    $ip = "{{ item.ip }}"
+    
+    $existingRecord = Get-DnsServerResourceRecord -ZoneName $zone -Name $name -RRType A -ErrorAction SilentlyContinue
+    if (-not $existingRecord) {
+      Add-DnsServerResourceRecordA -ZoneName $zone -Name $name -IPv4Address $ip
+      Write-Output "Created $name"
+    } else {
+      Write-Output "Record $name already exists"
+    }
+  args:
+    executable: powershell
+  loop: "{{ dns_records }}"
+  register: dns_records_result
+
+- name: Create MX record for mail server
+  win_shell: |
+    $zone = "{{ domain_name }}"
+    $mailServer = "gt-mail.{{ domain_name }}"
+    
+    $existingMX = Get-DnsServerResourceRecord -ZoneName $zone -RRType MX -ErrorAction SilentlyContinue | Where-Object {$_.RecordData.MailExchange -eq $mailServer}
+    if (-not $existingMX) {
+      Add-DnsServerResourceRecordMX -ZoneName $zone -Name "@" -MailExchange $mailServer -Preference 10
+      Write-Output "Created MX record"
+    } else {
+      Write-Output "MX record already exists"
+    }
+  args:
+    executable: powershell
+  register: mx_record_result
+
+- name: Configure DNS forwarders
+  win_shell: |
+    $forwarders = @("8.8.8.8", "1.1.1.1")
+    $currentForwarders = (Get-DnsServerForwarder -ErrorAction SilentlyContinue).IPAddress.IPAddressToString
+    
+    $needsUpdate = $false
+    foreach ($fwd in $forwarders) {
+      if ($currentForwarders -notcontains $fwd) {
+        $needsUpdate = $true
+        break
+      }
+    }
+    
+    if ($needsUpdate) {
+      Set-DnsServerForwarder -IPAddress $forwarders
+      Write-Output "Updated forwarders"
+    } else {
+      Write-Output "Forwarders already configured"
+    }
+  args:
+    executable: powershell
+  register: forwarders_result
+
+- name: Create LDAP service principal name
+  win_shell: |
+    $hostname = "gt-dc.{{ domain_name }}"
+    $spn = "ldap/$hostname"
+    
+    $existing = setspn -L gt-dc$ | Select-String $spn
+    if (-not $existing) {
+      setspn -A $spn gt-dc$
+      Write-Output "Created LDAP SPN"
+    } else {
+      Write-Output "LDAP SPN already exists"
+    }
+  args:
+    executable: powershell
+  register: ldap_spn_result
+  ignore_errors: yes
+
+- name: Configure firewall rules for AD services
+  win_firewall_rule:
+    name: "{{ item.name }}"
+    localport: "{{ item.port }}"
+    protocol: "{{ item.protocol }}"
+    direction: in
+    action: allow
+    state: present
+    enabled: yes
+  loop:
+    - { name: "DNS", port: "53", protocol: "udp" }
+    - { name: "DNS-TCP", port: "53", protocol: "tcp" }
+    - { name: "Kerberos", port: "88", protocol: "tcp" }
+    - { name: "Kerberos-UDP", port: "88", protocol: "udp" }
+    - { name: "LDAP", port: "389", protocol: "tcp" }
+    - { name: "LDAP-UDP", port: "389", protocol: "udp" }
+    - { name: "LDAPS", port: "636", protocol: "tcp" }
+    - { name: "Global Catalog", port: "3268", protocol: "tcp" }
+    - { name: "Global Catalog SSL", port: "3269", protocol: "tcp" }
+    - { name: "SMB", port: "445", protocol: "tcp" }
+    - { name: "Windows Exporter", port: "9182", protocol: "tcp" }
+
+- name: Display domain information
+  win_shell: |
+    Get-ADDomain | Select-Object Name, DNSRoot, NetBIOSName, DomainMode, ForestMode | Format-List
+  args:
+    executable: powershell
+  register: domain_info
+  changed_when: false
+
+- name: Show domain info
+  debug:
+    var: domain_info.stdout_lines
+
