@@ -1,6 +1,7 @@
 - name: Test de connectivité Windows
   hosts: windows
   gather_facts: no
+  become: false
   tasks:
     - name: Ping WinRM
       win_ping:
