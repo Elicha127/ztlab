@@ -28,3 +28,13 @@ groups:
         annotations:
           summary: "Mémoire élevée sur {{ $labels.instance }}"
           description: "Utilisation mémoire à {{ $value }}%."
+
+      - alert: MultipleFailedLogins
+        expr: increase(failed_login_attempts_total[5m]) >= 3
+        for: 1m
+        labels:
+          severity: critical
+          type: security
+        annotations:
+          summary: "Trois échecs de connexion détectés"
+          description: "Plus de 3 tentatives de connexion échouées en 5 minutes sur {{ $labels.instance }}."

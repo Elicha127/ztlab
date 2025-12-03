@@ -2,3 +2,5 @@
 collections:
   - name: ansible.windows
   - name: community.windows
+python_requirements:
+  - pywinrm
