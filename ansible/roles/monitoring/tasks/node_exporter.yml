@@ -1,70 +1,79 @@
-# roles/monitoring/tasks/node_exporter.yml
 ---
-- name: Ensure /usr/local/bin exists
-  file:
-    path: /usr/local/bin
-    state: directory
-    mode: '0755'
+- name: Deploy Node Exporter on Linux servers
+  hosts: linux
+  become: yes
 
-- name: download node_exporter tarball (x86_64)
-  get_url:
-    url: https://github.com/prometheus/node_exporter/releases/download/v1.7.1/node_exporter-1.7.1.linux-amd64.tar.gz
-    dest: /tmp/node_exporter.tar.gz
-    mode: '0644'
-  when: ansible_architecture == 'x86_64'
+  tasks:
+    - name: Check if node_exporter binary exists
+      stat:
+        path: /opt/node_exporter/node_exporter
+      register: node_exporter_bin
 
-- name: extract node_exporter
-  unarchive:
-    src: /tmp/node_exporter.tar.gz
-    dest: /usr/local/bin/
-    remote_src: yes
-  when: ansible_architecture == 'x86_64'
+    - name: Create installation directory
+      file:
+        path: /opt/node_exporter
+        state: directory
+        mode: '0755'
+      when: not node_exporter_bin.stat.exists
+      become: yes
 
-- name: move node_exporter binary to /usr/local/bin
-  command: mv /usr/local/bin/node_exporter-*/node_exporter /usr/local/bin/node_exporter
-  args:
-    creates: /usr/local/bin/node_exporter
-  when: ansible_architecture == 'x86_64'
+    - name: Download Node Exporter archive
+      get_url:
+        url: https://github.com/prometheus/node_exporter/releases/download/v1.8.1/node_exporter-1.8.1.linux-amd64.tar.gz
+        dest: /tmp/node_exporter.tar.gz
+      when: not node_exporter_bin.stat.exists
+      become: yes
 
-- name: add node_exporter user
-  user:
-    name: node_exporter
-    shell: /usr/sbin/nologin
-    system: yes
-    create_home: no
+    - name: Extract Node Exporter
+      unarchive:
+        src: /tmp/node_exporter.tar.gz
+        dest: /tmp/
+        remote_src: yes
+      when: not node_exporter_bin.stat.exists
+      become: yes
 
-- name: set ownership of binary
-  file:
-    path: /usr/local/bin/node_exporter
-    owner: node_exporter
-    group: node_exporter
-    mode: '0755'
-  when: ansible_architecture == 'x86_64'
+    - name: Move binary to /opt/node_exporter
+      copy:
+        src: /tmp/node_exporter-1.8.1.linux-amd64/node_exporter
+        dest: /opt/node_exporter/node_exporter
+        mode: '0755'
+        remote_src: yes
+      when: not node_exporter_bin.stat.exists
+      become: yes
 
-- name: create node_exporter systemd service
-  copy:
-    dest: /etc/systemd/system/node_exporter.service
-    content: |
-      [Unit]
-      Description=Node Exporter
-      After=network.target
+    - name: Create node_exporter user
+      user:
+        name: node_exporter
+        shell: /bin/false
+        create_home: no
+        system: yes
+      become: yes
 
-      [Service]
-      User=node_exporter
-      Group=node_exporter
-      ExecStart=/usr/local/bin/node_exporter
+    - name: Create systemd service file
+      copy:
+        dest: /etc/systemd/system/node_exporter.service
+        content: |
+          [Unit]
+          Description=Node Exporter
+          After=network.target
 
-      [Install]
-      WantedBy=multi-user.target
-  notify: reload systemd
+          [Service]
+          User=node_exporter
+          Group=node_exporter
+          ExecStart=/opt/node_exporter/node_exporter --web.listen-address=:9100
+          Restart=always
 
-- name: enable and start node_exporter
-  systemd:
-    name: node_exporter
-    enabled: yes
-    state: started
+          [Install]
+          WantedBy=multi-user.target
+      become: yes
 
-- name: clean tmp file
-  file:
-    path: /tmp/node_exporter.tar.gz
-    state: absent
+    - name: Reload systemd
+      command: systemctl daemon-reload
+      become: yes
+
+    - name: Enable and start Node Exporter
+      systemd:
+        name: node_exporter
+        enabled: yes
+        state: started
+      become: yes

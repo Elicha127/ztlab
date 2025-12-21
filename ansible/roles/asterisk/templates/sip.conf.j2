@@ -1,0 +1,40 @@
+[general]
+context=default
+allowguest=no
+allowoverlap=no
+bindport={{ sip_port }}
+bindaddr=0.0.0.0
+srvlookup=no
+
+; Codecs
+disallow=all
+{% for codec in codecs %}
+allow={{ codec }}
+{% endfor %}
+
+; Réseau
+localnet=192.168.0.0/255.255.0.0
+externip={{ static_ip }}
+nat=force_rport,comedia
+
+; Autres paramètres
+language=en
+qualify=yes
+dtmfmode=rfc2833
+
+{% for account in sip_accounts %}
+[{{ account.username }}]
+type=friend
+secret={{ account.password }}
+host=dynamic
+context={{ account.context }}
+canreinvite=no
+qualify=yes
+nat=force_rport,comedia
+disallow=all
+{% for codec in codecs %}
+allow={{ codec }}
+{% endfor %}
+; {{ account.description }}
+
+{% endfor %}

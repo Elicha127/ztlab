@@ -1,0 +1,14 @@
+network:
+  version: 2
+  ethernets:
+    {{ ansible_default_ipv4.interface }}:
+      addresses:
+        - {{ static_ip }}/24
+      routes:
+        - to: default
+          via: {{ default_gateway }}
+      nameservers:
+        addresses:
+{% for dns in dns_servers %}
+          - {{ dns }}
+{% endfor %}

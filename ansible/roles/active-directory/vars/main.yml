@@ -31,3 +31,5 @@ dns_records:
     ip: "192.168.40.20"
   - name: "client-win"
     ip: "192.168.30.4"
+  - name: "client_win2"
+    ip: "192.168.50.10"

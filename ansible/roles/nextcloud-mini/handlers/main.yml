@@ -1,0 +1,25 @@
+---
+# ============================================================================
+# HANDLERS - NEXTCLOUD-MINI
+# Gestion automatique des redémarrages de services
+# ============================================================================
+
+- name: restart apache2
+  systemd:
+    name: apache2
+    state: restarted
+    enabled: yes
+  become: yes
+
+- name: reload apache2
+  systemd:
+    name: apache2
+    state: reloaded
+  become: yes
+
+- name: restart mariadb
+  systemd:
+    name: mariadb
+    state: restarted
+    enabled: yes
+  become: yes

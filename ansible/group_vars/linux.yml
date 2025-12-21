@@ -4,3 +4,8 @@ ansible_python_interpreter: /usr/bin/python3
 ansible_become: yes
 ansible_become_method: sudo
 ansible_become_user: root
+# DNS du contrôleur de domaine (AD)
+dc_dns: 192.168.30.10
+
+# Port de Node Exporter
+node_exporter_port: 9100

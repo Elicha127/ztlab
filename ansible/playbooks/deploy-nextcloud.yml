@@ -1,0 +1,74 @@
+---
+# ============================================================================
+# DÉPLOIEMENT NEXTCLOUD MINI - DÉMONSTRATION ACADÉMIQUE
+# Infrastructure Zero Trust - Automatisation par IaC
+# ============================================================================
+
+- name: "🚀 Déploiement Nextcloud automatisé"
+  hosts: apps
+  gather_facts: yes
+  become: yes
+  
+  pre_tasks:
+    - name: "📢 Annonce démarrage déploiement"
+      debug:
+        msg:
+          - ""
+          - "╔═══════════════════════════════════════════════════════════════╗"
+          - "║                                                               ║"
+          - "║        DÉPLOIEMENT NEXTCLOUD - DÉMONSTRATION IaC              ║"
+          - "║                                                               ║"
+          - "╚═══════════════════════════════════════════════════════════════╝"
+          - ""
+          - "Serveur cible : {{ inventory_hostname }} ({{ ansible_default_ipv4.address }})"
+          - "Mode offline  : {{ offline_mode | default(false) }}"
+          - "Port HTTP     : {{ nextcloud_http_port }}"
+          - ""
+          - "⏱️  Durée estimée : 3-5 minutes"
+          - ""
+      delegate_to: localhost
+      run_once: yes
+
+    - name: "⏸️  Pause lecture (3 secondes)"
+      pause:
+        seconds: 3
+      delegate_to: localhost
+      run_once: yes
+
+  roles:
+    - role: nextcloud-mini
+      tags: [nextcloud, deploy]
+
+  post_tasks:
+    - name: "🎉 Résumé déploiement"
+      debug:
+        msg:
+          - ""
+          - "╔═══════════════════════════════════════════════════════════════╗"
+          - "║                                                               ║"
+          - "║           ✅ NEXTCLOUD DÉPLOYÉ AVEC SUCCÈS !                  ║"
+          - "║                                                               ║"
+          - "╚═══════════════════════════════════════════════════════════════╝"
+          - ""
+          - "🔗 URL d'accès :"
+          - "   http://{{ ansible_default_ipv4.address }}:{{ nextcloud_http_port }}"
+          - ""
+          - "👤 Connexion :"
+          - "   Utilisateur : {{ nextcloud_admin_user }}"
+          - "   Mot de passe: {{ nextcloud_admin_password }}"
+          - ""
+          - "📊 Services actifs :"
+          - "   • Apache2    : Port {{ nextcloud_http_port }}"
+          - "   • MariaDB    : localhost:3306"
+          - "   • Nextcloud  : v{{ nextcloud_version }}"
+          - ""
+          - "📁 Emplacements :"
+          - "   • Application : {{ nextcloud_install_dir }}"
+          - "   • Données     : {{ nextcloud_data_dir }}"
+          - ""
+          - "⏱️  Durée totale : {{ ansible_play_time | default('N/A') }}"
+          - ""
+          - "🎯 Infrastructure prête pour démonstration !"
+          - ""
+      delegate_to: localhost
+      run_once: yes

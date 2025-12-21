@@ -1,0 +1,21 @@
+---
+- name: apply netplan
+  command: netplan apply
+
+- name: restart postfix
+  systemd:
+    name: postfix
+    state: restarted
+
+- name: restart dovecot
+  systemd:
+    name: dovecot
+    state: restarted
+
+- name: restart opendkim
+  systemd:
+    name: opendkim
+    state: restarted
+
+- name: postmap virtual
+  command: postmap /etc/postfix/virtual

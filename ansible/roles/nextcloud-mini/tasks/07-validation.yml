@@ -1,0 +1,157 @@
+---
+# ============================================================================
+# ÉTAPE 7 : VALIDATION DÉPLOIEMENT
+# Tests fonctionnels et rapport
+# ============================================================================
+
+# ============================================================================
+# TEST SERVICES SYSTÈME
+# ============================================================================
+
+- name: "🔍 Vérification service Apache"
+  systemd:
+    name: apache2
+    state: started
+  register: apache_status
+
+- name: "🔍 Vérification service MariaDB"
+  systemd:
+    name: mariadb
+    state: started
+  register: mariadb_status
+
+- name: "✅ Services système opérationnels"
+  debug:
+    msg:
+      - "Apache2  : {{ 'Actif ✅' if apache_status.status.ActiveState == 'active' else 'Inactif ❌' }}"
+      - "MariaDB  : {{ 'Actif ✅' if mariadb_status.status.ActiveState == 'active' else 'Inactif ❌' }}"
+
+# ============================================================================
+# TEST CONNECTIVITÉ HTTP
+# ============================================================================
+
+- name: "🌐 Test accès HTTP Nextcloud"
+  uri:
+    url: "http://{{ ansible_default_ipv4.address }}:{{ nextcloud_http_port }}/status.php"
+    method: GET
+    return_content: yes
+    timeout: 10
+  register: nc_http_test
+  failed_when: false
+
+- name: "📊 Statut HTTP"
+  debug:
+    msg: "{{ nc_http_test.json if nc_http_test.status == 200 else 'Échec connexion HTTP' }}"
+
+- name: "✅ Validation accès web"
+  assert:
+    that:
+      - nc_http_test.status == 200
+      - nc_http_test.json.installed == true
+    success_msg: "✅ Nextcloud accessible via HTTP"
+    fail_msg: "❌ Nextcloud inaccessible"
+
+# ============================================================================
+# TEST COMMANDE OCC
+# ============================================================================
+
+- name: "⚙️  Test commande occ"
+  command: php {{ nextcloud_install_dir }}/occ status --output=json
+  register: occ_status
+  become_user: "{{ nextcloud_web_user }}"
+  changed_when: false
+
+- name: "📊 Statut Nextcloud (occ)"
+  debug:
+    msg: "{{ occ_status.stdout | from_json }}"
+
+# ============================================================================
+# VÉRIFICATION BASE DE DONNÉES
+# ============================================================================
+
+- name: "🗄️  Test connexion base de données"
+  command: |
+    mysql -u {{ nextcloud_db_user }} -p{{ nextcloud_db_password }} \
+    -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='{{ nextcloud_db_name }}';"
+  register: db_tables
+  changed_when: false
+  no_log: true
+
+- name: "📊 Tables base de données"
+  debug:
+    msg: "{{ db_tables.stdout_lines[-1] }} tables dans {{ nextcloud_db_name }}"
+
+# ============================================================================
+# RAPPORT FINAL
+# ============================================================================
+
+- name: "📋 Génération rapport déploiement"
+  copy:
+    content: |
+      ═══════════════════════════════════════════════════════════════
+      RAPPORT DE DÉPLOIEMENT NEXTCLOUD
+      ═══════════════════════════════════════════════════════════════
+      
+      Date           : {{ ansible_date_time.iso8601 }}
+      Serveur        : {{ inventory_hostname }} ({{ ansible_default_ipv4.address }})
+      Version        : Nextcloud {{ nextcloud_version }}
+      Mode           : {{ 'OFFLINE' if offline_mode else 'ONLINE' }}
+      
+      ───────────────────────────────────────────────────────────────
+      CONFIGURATION
+      ───────────────────────────────────────────────────────────────
+      
+      URL            : http://{{ ansible_default_ipv4.address }}:{{ nextcloud_http_port }}
+      Admin          : {{ nextcloud_admin_user }}
+      
+      Répertoires:
+        Application  : {{ nextcloud_install_dir }}
+        Données      : {{ nextcloud_data_dir }}
+      
+      Base de données:
+        Nom          : {{ nextcloud_db_name }}
+        Utilisateur  : {{ nextcloud_db_user }}
+        Hôte         : {{ nextcloud_db_host }}
+      
+      ───────────────────────────────────────────────────────────────
+      STATUT SERVICES
+      ───────────────────────────────────────────────────────────────
+      
+      Apache2        : {{ 'Actif ✅' if apache_status.status.ActiveState == 'active' else 'Inactif ❌' }}
+      MariaDB        : {{ 'Actif ✅' if mariadb_status.status.ActiveState == 'active' else 'Inactif ❌' }}
+      Nextcloud      : {{ 'Installé ✅' if nc_http_test.status == 200 else 'Erreur ❌' }}
+      
+      ───────────────────────────────────────────────────────────────
+      TESTS DE VALIDATION
+      ───────────────────────────────────────────────────────────────
+      
+      HTTP Status    : {{ nc_http_test.status }}
+      OCC Command    : {{ 'OK ✅' if occ_status.rc == 0 else 'Erreur ❌' }}
+      Database Tables: {{ db_tables.stdout_lines[-1] if db_tables.rc == 0 else 'N/A' }}
+      
+      ═══════════════════════════════════════════════════════════════
+      
+      🎯 Déploiement réussi !
+      
+      Accès Nextcloud :
+        1. Ouvrir navigateur
+        2. http://{{ ansible_default_ipv4.address }}:{{ nextcloud_http_port }}
+        3. Se connecter : {{ nextcloud_admin_user }} / {{ nextcloud_admin_password }}
+      
+      ═══════════════════════════════════════════════════════════════
+    dest: "/tmp/nextcloud-deploy-{{ ansible_date_time.epoch }}.txt"
+    mode: '0644'
+
+- name: "✅ VALIDATION TERMINÉE"
+  debug:
+    msg:
+      - ""
+      - "╔═══════════════════════════════════════════════════════════════╗"
+      - "║                                                               ║"
+      - "║         ✅ NEXTCLOUD OPÉRATIONNEL                             ║"
+      - "║                                                               ║"
+      - "╚═══════════════════════════════════════════════════════════════╝"
+      - ""
+      - "🔗 URL : http://{{ ansible_default_ipv4.address }}:{{ nextcloud_http_port }}"
+      - "👤 User: {{ nextcloud_admin_user }}"
+      - ""

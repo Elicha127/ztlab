@@ -1,0 +1,132 @@
+#!/usr/bin/env python3
+"""
+Webhook receiver for Alertmanager
+Triggers Asterisk calls for critical alerts
+"""
+
+from flask import Flask, request, jsonify
+import subprocess
+import logging
+import os
+from datetime import datetime
+
+app = Flask(__name__)
+
+# Configuration du logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler('/var/log/asterisk-webhook.log'),
+        logging.StreamHandler()
+    ]
+)
+
+logger = logging.getLogger(__name__)
+
+# Configuration
+ASTERISK_EXTENSION = "{{ alert_extension }}"
+ASTERISK_CONTEXT = "alerts"
+SIP_ACCOUNT = "alerting"
+
+@app.route('/health', methods=['GET'])
+def health():
+    """Health check endpoint"""
+    return jsonify({
+        "status": "healthy",
+        "service": "asterisk-webhook",
+        "version": "1.0",
+        "timestamp": datetime.now().isoformat()
+    }), 200
+
+@app.route('/alert', methods=['POST'])
+def receive_alert():
+    """
+    Receive alerts from Alertmanager and trigger calls
+    """
+    try:
+        data = request.json
+        logger.info(f"Received alert payload: {data}")
+        
+        if not data or 'alerts' not in data:
+            logger.warning("Invalid alert payload received")
+            return jsonify({"status": "error", "message": "Invalid payload"}), 400
+        
+        alerts = data.get('alerts', [])
+        calls_triggered = 0
+        
+        for alert in alerts:
+            status = alert.get('status', 'unknown')
+            
+            # Ne traiter que les alertes actives (firing)
+            if status != 'firing':
+                logger.info(f"Alert status is {status}, skipping call")
+                continue
+            
+            alertname = alert.get('labels', {}).get('alertname', 'Unknown')
+            instance = alert.get('labels', {}).get('instance', 'Unknown')
+            severity = alert.get('labels', {}).get('severity', 'Unknown')
+            description = alert.get('annotations', {}).get('description', 'No description')
+            
+            logger.info(f"Processing alert: {alertname} on {instance} (severity: {severity})")
+            
+            # Déclencher un appel uniquement pour les alertes critiques
+            if severity == 'critical':
+                success = trigger_call(SIP_ACCOUNT, ASTERISK_EXTENSION, ASTERISK_CONTEXT, alertname)
+                
+                if success:
+                    logger.info(f"Call triggered successfully for alert: {alertname}")
+                    calls_triggered += 1
+                else:
+                    logger.error(f"Failed to trigger call for alert: {alertname}")
+            else:
+                logger.info(f"Alert severity is {severity}, no call triggered")
+        
+        return jsonify({
+            "status": "success",
+            "processed": len(alerts),
+            "calls_triggered": calls_triggered
+        }), 200
+    
+    except Exception as e:
+        logger.error(f"Error processing alert: {str(e)}", exc_info=True)
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+def trigger_call(sip_account, extension, context, alertname):
+    """
+    Trigger an Asterisk call using the originate command
+    """
+    try:
+        # Commande Asterisk pour originer un appel
+        cmd = [
+            'asterisk', '-rx',
+            f'channel originate SIP/{sip_account} extension {extension}@{context}'
+        ]
+        
+        logger.info(f"Executing command: {' '.join(cmd)}")
+        
+        result = subprocess.run(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            timeout=10,
+            text=True
+        )
+        
+        if result.returncode == 0:
+            logger.info(f"Asterisk command output: {result.stdout}")
+            return True
+        else:
+            logger.error(f"Asterisk command failed: {result.stderr}")
+            return False
+    
+    except subprocess.TimeoutExpired:
+        logger.error("Asterisk command timed out")
+        return False
+    except Exception as e:
+        logger.error(f"Error triggering call: {str(e)}")
+        return False
+
+if __name__ == '__main__':
+    logger.info(f"Starting Asterisk Webhook Server on 0.0.0.0:{{ webhook_port }}")
+    app.run(host='0.0.0.0', port={{ webhook_port }}, debug=False)

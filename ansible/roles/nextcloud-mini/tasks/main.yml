@@ -1,0 +1,74 @@
+---
+# ============================================================================
+# TASKS PRINCIPALES - NEXTCLOUD-MINI
+# Orchestration du déploiement
+# ============================================================================
+
+- name: "📋 Affichage configuration déploiement"
+  debug:
+    msg:
+      - "═══════════════════════════════════════════════════════════════"
+      - "  Configuration Nextcloud Mini"
+      - "═══════════════════════════════════════════════════════════════"
+      - "Version        : {{ nextcloud_version }}"
+      - "Serveur        : {{ inventory_hostname }}"
+      - "Port HTTP      : {{ nextcloud_http_port }}"
+      - "Répertoire app : {{ nextcloud_install_dir }}"
+      - "Répertoire data: {{ nextcloud_data_dir }}"
+      - "Mode offline   : {{ offline_mode }}"
+      - "═══════════════════════════════════════════════════════════════"
+
+- name: "⏸️  Pause lecture configuration (2 secondes)"
+  pause:
+    seconds: 2
+
+# ============================================================================
+# EXÉCUTION SÉQUENTIELLE DES ÉTAPES
+# ============================================================================
+
+- name: "1️⃣  Vérification prérequis système"
+  include_tasks: 01-prerequisites.yml
+  tags: [prerequisites]
+
+- name: "2️⃣  Installation paquets système"
+  include_tasks: 02-install-packages.yml
+  tags: [packages]
+
+- name: "3️⃣  Configuration base de données MariaDB"
+  include_tasks: 03-database.yml
+  tags: [database]
+
+- name: "4️⃣  Configuration PHP"
+  include_tasks: 04-php-config.yml
+  tags: [php]
+
+- name: "5️⃣  Installation et configuration Nextcloud"
+  include_tasks: 05-nextcloud-install.yml
+  tags: [nextcloud]
+
+- name: "6️⃣  Configuration Apache VirtualHost"
+  include_tasks: 06-apache-config.yml
+  tags: [apache]
+
+- name: "7️⃣  Validation déploiement"
+  include_tasks: 07-validation.yml
+  tags: [validation]
+
+# ============================================================================
+# RÉSUMÉ FINAL
+# ============================================================================
+
+- name: "✅ Déploiement terminé"
+  debug:
+    msg:
+      - ""
+      - "╔═══════════════════════════════════════════════════════════════╗"
+      - "║                                                               ║"
+      - "║         ✅ NEXTCLOUD OPÉRATIONNEL                             ║"
+      - "║                                                               ║"
+      - "╚═══════════════════════════════════════════════════════════════╝"
+      - ""
+      - "🔗 URL : http://{{ ansible_default_ipv4.address }}:{{ nextcloud_http_port }}"
+      - "👤 User: {{ nextcloud_admin_user }}"
+      - "🔑 Pass: {{ nextcloud_admin_password }}"
+      - ""

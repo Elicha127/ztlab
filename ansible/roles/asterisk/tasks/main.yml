@@ -1,0 +1,226 @@
+---
+- name: Set hostname to gt-voip
+  hostname:
+    name: "{{ hostname }}"
+
+- name: Update /etc/hosts
+  lineinfile:
+    path: /etc/hosts
+    line: "{{ static_ip }} {{ fqdn }} {{ hostname }}"
+    state: present
+
+- name: Configure static IP with Netplan
+  template:
+    src: netplan-config.yaml.j2
+    dest: /etc/netplan/01-netcfg.yaml
+    mode: '0644'
+  notify: apply netplan
+
+- name: Update apt cache
+  apt:
+    update_cache: yes
+    cache_valid_time: 3600
+
+- name: Install Asterisk and dependencies
+  apt:
+    name:
+      - asterisk
+      - asterisk-core-sounds-en
+      - asterisk-core-sounds-en-gsm
+      - asterisk-modules
+      - asterisk-moh-opsound-gsm
+      - python3
+      - python3-pip
+      - python3-venv
+      - sox
+      - libsox-fmt-all
+    state: present
+
+- name: Stop Asterisk before configuration
+  systemd:
+    name: asterisk
+    state: stopped
+
+- name: Create backup directory for original configs
+  file:
+    path: /etc/asterisk/backup_original
+    state: directory
+    mode: '0755'
+
+- name: Backup original Asterisk configs
+  shell: |
+    if [ ! -f /etc/asterisk/backup_original/.backup_done ]; then
+      cp /etc/asterisk/*.conf /etc/asterisk/backup_original/ 2>/dev/null || true
+      touch /etc/asterisk/backup_original/.backup_done
+    fi
+  args:
+    creates: /etc/asterisk/backup_original/.backup_done
+
+- name: Configure sip.conf
+  template:
+    src: sip.conf.j2
+    dest: /etc/asterisk/sip.conf
+    owner: asterisk
+    group: asterisk
+    mode: '0640'
+    backup: yes
+  notify: restart asterisk
+
+- name: Configure extensions.conf (dialplan)
+  template:
+    src: extensions.conf.j2
+    dest: /etc/asterisk/extensions.conf
+    owner: asterisk
+    group: asterisk
+    mode: '0640'
+    backup: yes
+  notify: restart asterisk
+
+- name: Configure asterisk.conf
+  template:
+    src: asterisk.conf.j2
+    dest: /etc/asterisk/asterisk.conf
+    owner: asterisk
+    group: asterisk
+    mode: '0640'
+    backup: yes
+  notify: restart asterisk
+
+- name: Configure modules.conf
+  template:
+    src: modules.conf.j2
+    dest: /etc/asterisk/modules.conf
+    owner: asterisk
+    group: asterisk
+    mode: '0640'
+    backup: yes
+  notify: restart asterisk
+
+- name: Configure rtp.conf
+  template:
+    src: rtp.conf.j2
+    dest: /etc/asterisk/rtp.conf
+    owner: asterisk
+    group: asterisk
+    mode: '0640'
+    backup: yes
+  notify: restart asterisk
+
+- name: Create custom sounds directory
+  file:
+    path: /usr/share/asterisk/sounds/custom
+    state: directory
+    owner: asterisk
+    group: asterisk
+    mode: '0755'
+
+- name: Create alert message text
+  copy:
+    dest: /usr/share/asterisk/sounds/custom/alert-message.txt
+    content: |
+      Alerte système Germe Tech.
+      Une alerte critique a été détectée sur l'infrastructure.
+      Veuillez consulter la console de supervision immédiatement.
+    mode: '0644'
+
+- name: Configure UFW firewall for Asterisk
+  ufw:
+    rule: allow
+    port: "{{ item.port }}"
+    proto: "{{ item.proto }}"
+    comment: "{{ item.comment }}"
+  loop:
+    - { port: "{{ sip_port }}", proto: "udp", comment: "Asterisk SIP" }
+    - { port: "{{ rtp_start }}:{{ rtp_end }}", proto: "udp", comment: "Asterisk RTP" }
+    - { port: "{{ webhook_port }}", proto: "tcp", comment: "Alertmanager Webhook" }
+
+- name: Enable UFW
+  ufw:
+    state: enabled
+
+- name: Create webhook directory
+  file:
+    path: /opt/asterisk-webhook
+    state: directory
+    mode: '0755'
+
+- name: Create Python virtual environment for webhook
+  pip:
+    name:
+      - flask
+      - requests
+    virtualenv: /opt/asterisk-webhook/venv
+    virtualenv_command: python3 -m venv
+
+- name: Deploy webhook script
+  template:
+    src: alert_caller.py.j2
+    dest: /opt/asterisk-webhook/alert_caller.py
+    mode: '0755'
+
+- name: Create systemd service for webhook
+  template:
+    src: asterisk-webhook.service.j2
+    dest: /etc/systemd/system/asterisk-webhook.service
+    mode: '0644'
+  notify:
+    - reload systemd
+    - restart webhook
+
+- name: Enable and start Asterisk service
+  systemd:
+    name: asterisk
+    enabled: yes
+    state: started
+
+#- name: Wait for Asterisk to be ready
+#  wait_for:
+#    port: "{{ sip_port }}"
+#    delay: 5
+#    timeout: 500
+- name: Wait for Asterisk to be ready
+  wait_for:
+    host: 192.168.40.20
+    port: "{{ sip_port }}"
+    delay: 5
+    timeout: 500
+
+- name: Enable and start webhook service
+  systemd:
+    name: asterisk-webhook
+    enabled: yes
+    state: started
+
+- name: Display Asterisk version
+  command: asterisk -V
+  register: asterisk_version_output
+  changed_when: false
+
+- name: Display SIP peers
+  shell: asterisk -rx "sip show peers"
+  register: sip_peers
+  changed_when: false
+  ignore_errors: yes
+
+- name: Create SIP accounts list
+  set_fact:
+    sip_accounts_list: "{{ sip_accounts | map(attribute='username') | list }}"
+
+- name: Show Asterisk configuration
+  debug:
+    msg:
+      - "Asterisk Version: {{ asterisk_version_output.stdout }}"
+      - "FQDN: {{ fqdn }}"
+      - "IP: {{ static_ip }}"
+      - "SIP Port: {{ sip_port }}"
+      - "RTP Ports: {{ rtp_start }}-{{ rtp_end }}"
+      - "Webhook Port: {{ webhook_port }}"
+      - ""
+      - "SIP Accounts: {{ sip_accounts_list | join(', ') }}"
+      - ""
+      - "Extensions:"
+      - "  - {{ alert_extension }} : Alert extension"
+      - "  - {{ admin_extension }} : Admin test"
+      - "  - {{ echo_extension }} : Echo test"
+      - ""
+      - "Check details: sudo asterisk -rx 'sip show peers'"

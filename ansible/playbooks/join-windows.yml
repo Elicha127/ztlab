@@ -1,0 +1,25 @@
+- hosts: windows
+  gather_facts: no
+  vars:
+    dns_domain_name: "germe-tech.local"
+    domain_admin_user: "GERME-TECH\\Administrator"
+    # ⚠️ NE PAS redéfinir domain_admin_password ici
+  tasks:
+    - name: Set DNS to DC
+      win_shell: |
+        $adapter = Get-NetAdapter | Where-Object {$_.Status -eq "Up"} | Select-Object -First 1
+        Set-DnsClientServerAddress -InterfaceIndex $adapter.ifIndex -ServerAddresses 192.168.30.10
+      args:
+        executable: powershell
+
+    - name: Join domain (server vs workstation OU)
+      microsoft.ad.membership:
+        dns_domain_name: "{{ dns_domain_name }}"
+        domain_admin_user: "{{ domain_admin_user }}"
+        domain_admin_password: "{{ domain_admin_password }}"
+        domain_ou_path: >-
+          {{ (inventory_hostname in ['gt-mail'])
+             | ternary('OU=Servers,DC=germe-tech,DC=local',
+                       'OU=Workstations,DC=germe-tech,DC=local') }}
+        state: domain
+        reboot: true

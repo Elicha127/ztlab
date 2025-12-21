@@ -1,0 +1,107 @@
+---
+# ============================================================================
+# ÉTAPE 1 : VÉRIFICATION PRÉREQUIS
+# Validation environnement avant déploiement
+# ============================================================================
+
+- name: "🔍 Détection version PHP disponible"
+  shell: |
+    apt-cache policy php | grep -oP 'Candidate: \K[0-9]+\.[0-9]+' | head -1
+  register: php_version_detect
+  changed_when: false
+  failed_when: false
+
+- name: "📌 Définition version PHP"
+  set_fact:
+    php_version: "{{ php_version_detect.stdout | default('8.1') }}"
+
+- name: "✅ Version PHP ciblée : {{ php_version }}"
+  debug:
+    msg: "PHP {{ php_version }} sera utilisé"
+
+# ============================================================================
+# VÉRIFICATION CACHE OFFLINE (si mode offline activé)
+# ============================================================================
+
+- name: "📦 Vérification cache offline"
+  when: offline_mode
+  block:
+    - name: "Vérification présence cache sur controller"
+      delegate_to: controller
+      become: no
+      stat:
+        path: "{{ cache_base_dir }}/archives/nextcloud-{{ nextcloud_version }}.tar.bz2"
+      register: cache_check
+
+    - name: "❌ Erreur : cache manquant"
+      fail:
+        msg: |
+          ═══════════════════════════════════════════════════════════════
+          ❌ MODE OFFLINE ACTIVÉ MAIS CACHE ABSENT !
+          ═══════════════════════════════════════════════════════════════
+          
+          Le cache doit être préparé avec :
+            ansible-playbook playbooks/prepare-offline-cache.yml
+          
+          Chemin attendu : {{ cache_base_dir }}/archives/
+          ═══════════════════════════════════════════════════════════════
+      when: not cache_check.stat.exists
+
+    - name: "✅ Cache offline disponible"
+      debug:
+        msg: "Cache trouvé : {{ cache_check.stat.path }}"
+
+# ============================================================================
+# VÉRIFICATION ESPACE DISQUE
+# ============================================================================
+
+- name: "💾 Vérification espace disque disponible"
+  shell: df -BG /var | tail -1 | awk '{print $4}' | sed 's/G//'
+  register: disk_space
+  changed_when: false
+
+- name: "✅ Validation espace disque (minimum 5 GB)"
+  assert:
+    that:
+      - disk_space.stdout | int >= 5
+    fail_msg: |
+      ❌ Espace disque insuffisant !
+      Disponible : {{ disk_space.stdout }} GB
+      Requis     : 5 GB minimum
+    success_msg: "✅ Espace disque OK : {{ disk_space.stdout }} GB disponibles"
+
+# ============================================================================
+# VÉRIFICATION PORT DISPONIBLE
+# ============================================================================
+
+- name: "🔌 Vérification port {{ nextcloud_http_port }} disponible"
+  wait_for:
+    port: "{{ nextcloud_http_port }}"
+    state: stopped
+    timeout: 2
+  ignore_errors: yes
+  register: port_check
+
+- name: "⚠️  Avertissement port occupé"
+  debug:
+    msg: |
+      ⚠️  Le port {{ nextcloud_http_port }} semble déjà utilisé.
+      Le déploiement continuera mais pourrait nécessiter un ajustement.
+  when: port_check.failed | default(false)
+
+# ============================================================================
+# CRÉATION RÉPERTOIRES DE BASE
+# ============================================================================
+
+- name: "📁 Création répertoires système"
+  file:
+    path: "{{ item }}"
+    state: directory
+    mode: '0755'
+  loop:
+    - "{{ nextcloud_data_dir }}"
+    - "/tmp/nextcloud-install"
+
+- name: "✅ Prérequis validés"
+  debug:
+    msg: "Tous les prérequis sont satisfaits, déploiement autorisé"

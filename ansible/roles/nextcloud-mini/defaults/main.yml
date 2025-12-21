@@ -1,0 +1,14 @@
+---
+# ============================================================================
+# VALEURS PAR DÉFAUT - NEXTCLOUD-MINI
+# Ces valeurs peuvent être surchargées dans vars/main.yml
+# ============================================================================
+
+# Version PHP (détection automatique si non spécifiée)
+php_version: "8.1"
+
+# Mode offline par défaut
+offline_mode: false
+
+# Timeout pour téléchargements
+download_timeout: 300

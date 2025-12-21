@@ -1,0 +1,91 @@
+---
+# ============================================================================
+# ÉTAPE 3 : CONFIGURATION BASE DE DONNÉES MARIADB
+# Création base et utilisateur pour Nextcloud
+# ============================================================================
+
+- name: "🔐 Sécurisation installation MariaDB"
+  block:
+    # Vérifier si mot de passe root existe déjà
+    - name: "Test connexion root sans mot de passe"
+      command: mysql -u root -e "SELECT 1"
+      register: mysql_test
+      failed_when: false
+      changed_when: false
+      no_log: true
+
+    # Définir mot de passe root si première installation
+    - name: "Définition mot de passe root MariaDB"
+      mysql_user:
+        name: root
+        password: "{{ mysql_root_password }}"
+        login_unix_socket: /var/run/mysqld/mysqld.sock
+        state: present
+      when: mysql_test.rc == 0
+      no_log: true
+
+    # Suppression utilisateurs anonymes
+    - name: "Suppression utilisateurs anonymes"
+      mysql_user:
+        name: ''
+        host_all: yes
+        state: absent
+        login_user: root
+        login_password: "{{ mysql_root_password }}"
+      no_log: true
+      ignore_errors: yes
+
+    # Suppression base test
+    - name: "Suppression base de données test"
+      mysql_db:
+        name: test
+        state: absent
+        login_user: root
+        login_password: "{{ mysql_root_password }}"
+      ignore_errors: yes
+
+# ============================================================================
+# CRÉATION BASE NEXTCLOUD
+# ============================================================================
+
+- name: "🗄️  Création base de données {{ nextcloud_db_name }}"
+  mysql_db:
+    name: "{{ nextcloud_db_name }}"
+    state: present
+    encoding: utf8mb4
+    collation: utf8mb4_general_ci
+    login_user: root
+    login_password: "{{ mysql_root_password }}"
+  register: db_created
+
+- name: "👤 Création utilisateur {{ nextcloud_db_user }}"
+  mysql_user:
+    name: "{{ nextcloud_db_user }}"
+    password: "{{ nextcloud_db_password }}"
+    priv: "{{ nextcloud_db_name }}.*:ALL"
+    host: localhost
+    state: present
+    login_user: root
+    login_password: "{{ mysql_root_password }}"
+  no_log: true
+  register: user_created
+
+# ============================================================================
+# VALIDATION
+# ============================================================================
+
+- name: "🔍 Test connexion base de données"
+  command: |
+    mysql -u {{ nextcloud_db_user }} -p{{ nextcloud_db_password }} \
+    -e "USE {{ nextcloud_db_name }}; SELECT 1;"
+  register: db_test
+  changed_when: false
+  no_log: true
+
+- name: "✅ Base de données configurée"
+  debug:
+    msg:
+      - "Base de données : {{ nextcloud_db_name }}"
+      - "Utilisateur     : {{ nextcloud_db_user }}"
+      - "Statut          : {{ 'Créée' if db_created.changed else 'Existante' }}"
+      - "Connexion       : ✅ Validée"

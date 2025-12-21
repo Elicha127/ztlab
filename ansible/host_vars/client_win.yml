@@ -1,3 +1,6 @@
-ansible_user: client_win
+ansible_user: ansible_admin
 ansible_password: Elicha7agbo
-
+ansible_connection: winrm
+ansible_port: 5985
+ansible_winrm_transport: basic
+ansible_winrm_server_cert_validation: ignore

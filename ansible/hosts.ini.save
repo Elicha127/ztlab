@@ -1,0 +1,78 @@
+# ===========================================
+# INVENTAIRE ANSIBLE - INFRASTRUCTURE ZERO TRUST
+# ===========================================
+
+# ------------------------------
+# Contrôleur principal (où tourne Ansible)
+# ------------------------------
+[controller]
+zt-controller ansible_host=192.168.30.5 ansible_user=elicha ansible_connection=ssh
+
+# ------------------------------
+# Bastion (sas d’accès sécurisé)
+# ------------------------------
+[bastion]
+zt-bastion ansible_host=192.168.30.8 ansible_user=elicha_bastion ansible_connection=ssh
+
+# ------------------------------
+# Serveurs applicatifs
+# ------------------------------
+[apps]
+zt-app ansible_host=192.168.30.6 ansible_user=elicha_app ansible_connection=ssh
+
+# ------------------------------
+# Serveur de supervision (Prometheus, Grafana)
+# ------------------------------
+[monitoring]
+zt-monitor ansible_host=192.168.30.7 ansible_user=elicha_monitor ansible_connection=ssh
+
+# ------------------------------
+# Machine cliente (poste d’administration)
+# ------------------------------
+[client]
+zt-client ansible_host=192.168.30.132 ansible_user=aelicha ansible_connection=ssh
+
+# ------------------------------
+# Nouvelles machines Windows et Linux
+# ------------------------------
+[windows]
+# Primo : simple client Windows
+#client_win ansible_host=192.168.30.4 ansible_user=Administrateur ansible_connection=winrm ansible_winrm_transport=basic
+client_win ansible_host=192.168.30.4 ansible_user=ansible_admin ansible_password=Elicha7agbo ansible_connection=winrm ansible_winrm_transport=basic ansible_winrm_server_cert_validation=ignore
+client_win2 ansible_host=192.168.50.10 ansible
+
+# Active Directory / LDAP : Windows Server
+gt-dc ansible_host=192.168.30.10 ansible_user=Administrateur ansible_connection=winrm ansible_winrm_transport=basic
+
+[windows:vars]
+ansible_connection=winrm
+ansible_shell_type=powershell
+ansible_port=5985
+ansible_become=false
+
+
+[linux]
+# Asterisk : serveur VoIP Linux
+gt-voip ansible_host=192.168.40.20 ansible_user=elicha_voip ansible_connection=ssh
+gt-mail ansible_host=192.168.40.10 ansible_user=elicha_mail ansible_connection=ssh 
+
+# ------------------------------
+# Groupe logique : toutes les machines à superviser
+# ------------------------------
+[exporters:children]
+controller
+bastion
+apps
+monitoring
+client
+windows
+linux
+
+# ------------------------------
+# Variables globales (communes à tous les hôtes)
+# ------------------------------
+[all:vars]
+ansible_python_interpreter=/usr/bin/python3
+ansible_become=yes
+ansible_become_method=sudo
+ansible_become_user=root

@@ -1,0 +1,17 @@
+---
+- name: apply netplan
+  command: netplan apply
+
+- name: restart asterisk
+  systemd:
+    name: asterisk
+    state: restarted
+
+- name: reload systemd
+  systemd:
+    daemon_reload: yes
+
+- name: restart webhook
+  systemd:
+    name: asterisk-webhook
+    state: restarted

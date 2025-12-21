@@ -1,0 +1,155 @@
+---
+# ============================================================================
+# PRÉPARATION CACHE OFFLINE NEXTCLOUD
+# À exécuter UNE FOIS avec connexion Internet
+# ============================================================================
+
+- name: "📦 Préparation cache offline Nextcloud"
+  hosts: controller
+  gather_facts: yes
+  become: yes
+  
+  vars:
+    cache_base_dir: "/opt/ansible-cache/nextcloud"
+    nextcloud_version: "28.0.1"
+    nextcloud_url: "https://download.nextcloud.com/server/releases/nextcloud-{{ nextcloud_version }}.tar.bz2"
+    
+  tasks:
+    - name: "📢 Information préparation"
+      debug:
+        msg:
+          - ""
+          - "╔═══════════════════════════════════════════════════════════════╗"
+          - "║                                                               ║"
+          - "║        PRÉPARATION CACHE OFFLINE NEXTCLOUD                    ║"
+          - "║                                                               ║"
+          - "╚═══════════════════════════════════════════════════════════════╝"
+          - ""
+          - "Version Nextcloud : {{ nextcloud_version }}"
+          - "Destination cache : {{ cache_base_dir }}"
+          - ""
+          - "⚠️  Connexion Internet requise !"
+          - "⏱️  Durée estimée : 5-10 minutes"
+          - ""
+
+    # ========================================================================
+    # CRÉATION STRUCTURE CACHE
+    # ========================================================================
+    
+    - name: "📁 Création structure de cache"
+      file:
+        path: "{{ item }}"
+        state: directory
+        mode: '0755'
+      loop:
+        - "{{ cache_base_dir }}"
+        - "{{ cache_base_dir }}/archives"
+        - "{{ cache_base_dir }}/packages"
+
+    # ========================================================================
+    # TÉLÉCHARGEMENT ARCHIVE NEXTCLOUD
+    # ========================================================================
+    
+    - name: "📥 Téléchargement Nextcloud {{ nextcloud_version }}"
+      get_url:
+        url: "{{ nextcloud_url }}"
+        dest: "{{ cache_base_dir }}/archives/nextcloud-{{ nextcloud_version }}.tar.bz2"
+        timeout: 600
+      register: nc_download
+
+    - name: "✅ Archive Nextcloud téléchargée"
+      debug:
+        msg:
+          - "Fichier : {{ nc_download.dest }}"
+          - "Taille  : {{ (nc_download.size | int / 1024 / 1024) | round(1) }} MB"
+
+    # ========================================================================
+    # TÉLÉCHARGEMENT PAQUETS .DEB
+    # ========================================================================
+    
+    - name: "📥 Téléchargement paquets système (.deb)"
+      apt:
+        name:
+          - apache2
+          - libapache2-mod-php
+          - mariadb-server
+          - php-fpm
+          - php-mysql
+          - php-gd
+          - php-curl
+          - php-xml
+          - php-zip
+          - php-mbstring
+          - php-intl
+          - php-bcmath
+          - php-gmp
+          - php-imagick
+          - python3-pymysql
+          - bzip2
+        state: present
+        download_only: yes
+      register: pkg_download
+
+    - name: "📦 Copie paquets dans cache"
+      shell: |
+        mkdir -p {{ cache_base_dir }}/packages
+        find /var/cache/apt/archives -name "*.deb" -newer /var/cache/apt/pkgcache.bin \
+          -exec cp {} {{ cache_base_dir }}/packages/ \; 2>/dev/null || true
+      changed_when: false
+
+    # ========================================================================
+    # VALIDATION CACHE
+    # ========================================================================
+    
+    - name: "✅ Comptage fichiers .deb"
+      find:
+        paths: "{{ cache_base_dir }}/packages"
+        patterns: "*.deb"
+      register: deb_files
+
+    - name: "✅ Vérification archive Nextcloud"
+      stat:
+        path: "{{ cache_base_dir }}/archives/nextcloud-{{ nextcloud_version }}.tar.bz2"
+      register: nc_archive
+
+    # ========================================================================
+    # CRÉATION ARCHIVE DE BACKUP
+    # ========================================================================
+    
+    - name: "💾 Création archive de backup complète"
+      archive:
+        path: "{{ cache_base_dir }}"
+        dest: "/tmp/nextcloud-offline-cache-{{ ansible_date_time.date }}.tar.gz"
+        format: gz
+      register: backup_archive
+
+    # ========================================================================
+    # RÉSULTAT FINAL
+    # ========================================================================
+    
+    - name: "🎉 Cache offline prêt"
+      debug:
+        msg:
+          - ""
+          - "╔═══════════════════════════════════════════════════════════════╗"
+          - "║                                                               ║"
+          - "║           ✅ CACHE OFFLINE PRÊT !                             ║"
+          - "║                                                               ║"
+          - "╚═══════════════════════════════════════════════════════════════╝"
+          - ""
+          - "📦 Contenu du cache :"
+          - "   • Archive Nextcloud  : {{ (nc_archive.stat.size | int / 1024 / 1024) | round(1) }} MB"
+          - "   • Paquets .deb       : {{ deb_files.matched }} fichiers"
+          - ""
+          - "📁 Emplacement :"
+          - "   {{ cache_base_dir }}/"
+          - ""
+          - "💾 Archive de backup :"
+          - "   {{ backup_archive.dest }}"
+          - "   Taille : {{ (backup_archive.archived | length) }} fichiers"
+          - ""
+          - "🎯 Prêt pour déploiement offline !"
+          - ""
+          - "💡 Conseil : Copiez l'archive sur clé USB de secours"
+          - "   cp {{ backup_archive.dest }} /media/usb/"
+          - ""

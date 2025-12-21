@@ -206,3 +206,55 @@
   debug:
     var: domain_info.stdout_lines
 
+- name: Copy AD identity script
+  win_copy:
+    src: ad_identity.ps1
+    dest: C:\Temp\ad_identity.ps1
+
+- name: Run AD identity script
+  win_shell: C:\Temp\ad_identity.ps1
+  args:
+    executable: powershell
+
+- name: Ensure grafana_bind service account exists
+  win_shell: |
+    $pwd = ConvertTo-SecureString "GrafanaBind@2024!" -AsPlainText -Force
+    $user = Get-ADUser -Filter "SamAccountName -eq 'grafana_bind'" -ErrorAction SilentlyContinue
+    if (-not $user) {
+      New-ADUser -Name "grafana_bind" `
+                 -SamAccountName "grafana_bind" `
+                 -Path "OU=ServiceAccounts,DC=germe-tech,DC=local" `
+                 -AccountPassword $pwd `
+                 -Enabled $true `
+                 -PasswordNeverExpires $true
+      Add-ADGroupMember -Identity "Monitoring" -Members "grafana_bind"
+    }
+  args:
+    executable: powershell
+- name: Ensure Monitoring group exists
+  win_shell: |
+    if (-not (Get-ADGroup -Filter "SamAccountName -eq 'Monitoring'" -ErrorAction SilentlyContinue)) {
+      New-ADGroup -Name "Monitoring" `
+                  -SamAccountName "Monitoring" `
+                  -GroupScope Global `
+                  -GroupCategory Security `
+                  -Path "OU=Groups,DC=germe-tech,DC=local"
+    }
+  args:
+    executable: powershell
+
+- name: Ensure grafana_bind service account exists
+  win_shell: |
+    $pwd = ConvertTo-SecureString "GrafanaBind@2024!" -AsPlainText -Force
+    $user = Get-ADUser -Filter "SamAccountName -eq 'grafana_bind'" -ErrorAction SilentlyContinue
+    if (-not $user) {
+      New-ADUser -Name "grafana_bind" `
+                 -SamAccountName "grafana_bind" `
+                 -Path "OU=ServiceAccounts,DC=germe-tech,DC=local" `
+                 -AccountPassword $pwd `
+                 -Enabled $true `
+                 -PasswordNeverExpires $true
+    }
+    Add-ADGroupMember -Identity "Monitoring" -Members "grafana_bind" -ErrorAction SilentlyContinue
+  args:
+    executable: powershell

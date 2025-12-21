@@ -1,0 +1,21 @@
+[Unit]
+Description=Asterisk Webhook for Alertmanager
+After=network.target asterisk.service
+Requires=asterisk.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/asterisk-webhook
+ExecStart=/opt/asterisk-webhook/venv/bin/python /opt/asterisk-webhook/alert_caller.py
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+# Security
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

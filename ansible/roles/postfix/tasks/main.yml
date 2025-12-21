@@ -1,0 +1,242 @@
+---
+- name: Set hostname to gt-mail
+  hostname:
+    name: "{{ hostname }}"
+
+- name: Update /etc/hosts
+  lineinfile:
+    path: /etc/hosts
+    line: "{{ static_ip }} {{ fqdn }} {{ hostname }}"
+    state: present
+
+- name: Configure static IP with Netplan
+  template:
+    src: netplan-config.yaml.j2
+    dest: /etc/netplan/01-netcfg.yaml
+    mode: '0644'
+  notify: apply netplan
+
+- name: Update apt cache
+  apt:
+    update_cache: yes
+    cache_valid_time: 3600
+
+- name: Install Postfix and related packages
+  apt:
+    name:
+      - postfix
+      - postfix-ldap
+      - dovecot-core
+      - dovecot-imapd
+      - dovecot-pop3d
+      - mailutils
+      - opendkim
+      - opendkim-tools
+      - swaks  # Pour tests SMTP
+    state: present
+  environment:
+    DEBIAN_FRONTEND: noninteractive
+
+- name: Stop Postfix for configuration
+  systemd:
+    name: postfix
+    state: stopped
+
+- name: Configure Postfix main.cf
+  template:
+    src: main.cf.j2
+    dest: /etc/postfix/main.cf
+    owner: root
+    group: root
+    mode: '0644'
+    backup: yes
+  notify: restart postfix
+
+- name: Configure Postfix master.cf
+  template:
+    src: master.cf.j2
+    dest: /etc/postfix/master.cf
+    owner: root
+    group: root
+    mode: '0644'
+    backup: yes
+  notify: restart postfix
+
+- name: Create virtual alias map file
+  copy:
+    dest: /etc/postfix/virtual
+    content: |
+      # Virtual alias mappings
+      postmaster@{{ domain_local }}    admin
+      abuse@{{ domain_local }}         admin
+      root@{{ domain_local }}          admin
+    mode: '0644'
+  notify:
+    - postmap virtual
+    - restart postfix
+
+- name: Configure LDAP lookup for Postfix (if enabled)
+  template:
+    src: ldap-users.cf.j2
+    dest: /etc/postfix/ldap-users.cf
+    owner: root
+    group: postfix
+    mode: '0640'
+  when: ldap_enabled
+  notify: restart postfix
+
+- name: Create mail users (local system accounts)
+  user:
+    name: "{{ item.username }}"
+    comment: "{{ item.description }}"
+    password: "{{ item.password | password_hash('sha512') }}"
+    shell: /bin/bash
+    create_home: yes
+    home: "/home/{{ item.username }}"
+  loop: "{{ mail_users }}"
+
+- name: Create Maildir for each user
+  file:
+    path: "/home/{{ item.username }}/Maildir"
+    state: directory
+    owner: "{{ item.username }}"
+    group: "{{ item.username }}"
+    mode: '0700'
+  loop: "{{ mail_users }}"
+
+- name: Configure Dovecot
+  template:
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+    owner: root
+    group: root
+    mode: '0644'
+    backup: yes
+  loop:
+    - { src: 'dovecot.conf.j2', dest: '/etc/dovecot/dovecot.conf' }
+    - { src: '10-auth.conf.j2', dest: '/etc/dovecot/conf.d/10-auth.conf' }
+    - { src: '10-mail.conf.j2', dest: '/etc/dovecot/conf.d/10-mail.conf' }
+    - { src: '10-master.conf.j2', dest: '/etc/dovecot/conf.d/10-master.conf' }
+  notify: restart dovecot
+
+- name: Configure DKIM (DomainKeys Identified Mail)
+  block:
+    - name: Create DKIM directory
+      file:
+        path: /etc/opendkim/keys/{{ domain_local }}
+        state: directory
+        owner: opendkim
+        group: opendkim
+        mode: '0700'
+
+    - name: Generate DKIM keys
+      command: opendkim-genkey -b 2048 -d {{ domain_local }} -D /etc/opendkim/keys/{{ domain_local }} -s default -v
+      args:
+        creates: /etc/opendkim/keys/{{ domain_local }}/default.private
+
+    - name: Set DKIM key permissions
+      file:
+        path: /etc/opendkim/keys/{{ domain_local }}/default.private
+        owner: opendkim
+        group: opendkim
+        mode: '0600'
+
+    - name: Configure OpenDKIM
+      template:
+        src: opendkim.conf.j2
+        dest: /etc/opendkim.conf
+        mode: '0644'
+      notify: restart opendkim
+
+    - name: Create KeyTable
+      copy:
+        dest: /etc/opendkim/KeyTable
+        content: |
+          default._domainkey.{{ domain_local }} {{ domain_local }}:default:/etc/opendkim/keys/{{ domain_local }}/default.private
+        mode: '0644'
+      notify: restart opendkim
+
+    - name: Create SigningTable
+      copy:
+        dest: /etc/opendkim/SigningTable
+        content: |
+          *@{{ domain_local }} default._domainkey.{{ domain_local }}
+        mode: '0644'
+      notify: restart opendkim
+
+    - name: Create TrustedHosts
+      copy:
+        dest: /etc/opendkim/TrustedHosts
+        content: |
+          127.0.0.1
+          localhost
+          192.168.30.0/24
+          192.168.40.0/24
+          {{ domain_local }}
+        mode: '0644'
+      notify: restart opendkim
+
+- name: Configure firewall (UFW)
+  ufw:
+    rule: allow
+    port: "{{ item.port }}"
+    proto: "{{ item.proto }}"
+    comment: "{{ item.comment }}"
+  loop:
+    - { port: "25", proto: "tcp", comment: "SMTP" }
+    - { port: "587", proto: "tcp", comment: "SMTP Submission" }
+    - { port: "465", proto: "tcp", comment: "SMTPS" }
+    - { port: "110", proto: "tcp", comment: "POP3" }
+    - { port: "995", proto: "tcp", comment: "POP3S" }
+    - { port: "143", proto: "tcp", comment: "IMAP" }
+    - { port: "993", proto: "tcp", comment: "IMAPS" }
+
+- name: Enable and start Postfix
+  systemd:
+    name: postfix
+    enabled: yes
+    state: started
+
+- name: Enable and start Dovecot
+  systemd:
+    name: dovecot
+    enabled: yes
+    state: started
+
+- name: Enable and start OpenDKIM
+  systemd:
+    name: opendkim
+    enabled: yes
+    state: started
+
+- name: Display DKIM public key for DNS
+  shell: cat /etc/opendkim/keys/{{ domain_local }}/default.txt
+  register: dkim_public_key
+  changed_when: false
+
+- name: Show DKIM DNS record
+  debug:
+    msg: 
+      - "Add this TXT record to your DNS ({{ domain_local }}):"
+      - "{{ dkim_public_key.stdout }}"
+
+- name: Test Postfix configuration
+  command: postfix check
+  register: postfix_check
+  changed_when: false
+  failed_when: postfix_check.rc != 0
+
+- name: Send test email
+  shell: |
+    echo "This is a test email from Postfix on gt-mail ({{ static_ip }}). Installation completed successfully!" | mail -s "Postfix Test - Installation Complete" alerts@{{ domain_local }}
+  ignore_errors: yes
+  register: test_email
+
+- name: Display services status
+  debug:
+    msg:
+      - "Postfix: {{ 'Running' if postfix_check.rc == 0 else 'Error' }}"
+      - "Mail server ready at: {{ fqdn }}"
+      - "SMTP: {{ static_ip }}:25"
+      - "IMAP: {{ static_ip }}:143"
+      - "Test email sent to: alerts@{{ domain_local }}"

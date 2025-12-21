@@ -1,0 +1,56 @@
+---
+# Configuration réseau
+static_ip: "192.168.40.10"
+subnet_mask: "255.255.255.0"
+default_gateway: "192.168.40.1"
+dns_servers:
+  - "192.168.30.10"  # gt-dc
+  - "8.8.8.8"
+
+# Configuration domaine
+hostname: "gt-mail"
+domain_local: "germe-tech.local"
+domain_public: "germe-tech.com"
+fqdn: "gt-mail.germe-tech.local"
+
+# Comptes email à créer (utilisateurs système Linux)
+mail_users:
+  - username: "alerts"
+    password: "AlertsGT2024!"
+    email: "alerts@germe-tech.local"
+    description: "Alertes système"
+  - username: "admin"
+    password: "AdminGT2024!"
+    email: "admin@germe-tech.local"
+    description: "Administration"
+  - username: "supervision"
+    password: "SupervisionGT2024!"
+    email: "supervision@germe-tech.local"
+    description: "Supervision infrastructure"
+  - username: "noreply"
+    password: "NoReplyGT2024!"
+    email: "noreply@germe-tech.local"
+    description: "Notifications automatiques"
+
+# Configuration LDAP (intégration avec gt-dc)
+ldap_enabled: true
+ldap_server: "ldap://192.168.30.10"
+ldap_base_dn: "dc=germe-tech,dc=local"
+ldap_bind_dn: "CN=pfSenseBind,OU=ServiceAccounts,DC=germe-tech,DC=local"
+ldap_bind_password: "123s0le!l_G@m3"  # À changer
+
+# Configuration Postfix
+myhostname: "{{ fqdn }}"
+mydomain: "{{ domain_local }}"
+myorigin: "$mydomain"
+inet_interfaces: "all"
+inet_protocols: "ipv4"
+mydestination: "$myhostname, localhost.$mydomain, localhost, $mydomain"
+relay_domains: ""
+mynetworks: "192.168.30.0/24, 192.168.40.0/24, 127.0.0.0/8"
+home_mailbox: "Maildir/"
+mailbox_size_limit: 0
+message_size_limit: 20971520  # 20 MB
+
+# Dovecot (IMAP/POP3)
+dovecot_protocols: "imap pop3"

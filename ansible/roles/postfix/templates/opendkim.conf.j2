@@ -1,0 +1,20 @@
+# OpenDKIM configuration
+
+Syslog          yes
+SyslogSuccess   yes
+LogWhy          yes
+
+UMask           002
+
+Domain          {{ domain_local }}
+KeyTable        /etc/opendkim/KeyTable
+SigningTable    refile:/etc/opendkim/SigningTable
+ExternalIgnoreList  refile:/etc/opendkim/TrustedHosts
+InternalHosts   refile:/etc/opendkim/TrustedHosts
+
+Canonicalization    relaxed/simple
+Mode            sv
+SubDomains      no
+
+Socket          inet:8891@127.0.0.1
+PidFile         /var/run/opendkim/opendkim.pid

@@ -1,0 +1,30 @@
+---
+- name: Deploy Asterisk VoIP Server on gt-voip
+  hosts: gt-voip
+  become: yes
+  roles:
+    - asterisk
+    - monitoring
+  
+  post_tasks:
+    - name: Read SIP accounts from vars
+      set_fact:
+        sip_info: "{{ sip_accounts | map(attribute='username') | list | join(', ') }}"
+    
+    - name: Display VoIP server information
+      debug:
+        msg:
+          - "Asterisk VoIP server deployed successfully!"
+          - "FQDN: gt-voip.germe-tech.local"
+          - "IP: 192.168.40.20"
+          - "SIP Server: 192.168.40.20:5060"
+          - "Webhook: http://192.168.40.20:5000"
+          - ""
+          - "SIP Accounts: {{ sip_info }}"
+          - ""
+          - "Extensions: 100 (alerts), 200 (admin), 600 (echo test)"
+          - ""
+          - "Commands:"
+          - "  - Test webhook: curl http://192.168.40.20:5000/health"
+          - "  - Asterisk CLI: sudo asterisk -rvvv"
+          - "  - SIP peers: sudo asterisk -rx 'sip show peers'"

@@ -1,0 +1,58 @@
+---
+# ============================================================================
+# ÉTAPE 4 : CONFIGURATION PHP
+# Optimisation paramètres pour Nextcloud
+# ============================================================================
+
+- name: "📝 Configuration paramètres PHP (Apache)"
+  lineinfile:
+    path: "/etc/php/{{ php_version }}/apache2/php.ini"
+    regexp: "{{ item.regexp }}"
+    line: "{{ item.line }}"
+    backup: yes
+  loop:
+    - { regexp: '^memory_limit =', line: 'memory_limit = {{ php_memory_limit }}' }
+    - { regexp: '^upload_max_filesize =', line: 'upload_max_filesize = {{ php_upload_max_filesize }}' }
+    - { regexp: '^post_max_size =', line: 'post_max_size = {{ php_post_max_size }}' }
+    - { regexp: '^max_execution_time =', line: 'max_execution_time = {{ php_max_execution_time }}' }
+    - { regexp: '^;date.timezone =', line: 'date.timezone = Africa/Lome' }
+    - { regexp: '^;opcache.enable=', line: 'opcache.enable=1' }
+    - { regexp: '^;opcache.memory_consumption=', line: 'opcache.memory_consumption=128' }
+  notify: restart apache2
+
+- name: "📝 Configuration paramètres PHP (CLI)"
+  lineinfile:
+    path: "/etc/php/{{ php_version }}/cli/php.ini"
+    regexp: "{{ item.regexp }}"
+    line: "{{ item.line }}"
+    backup: yes
+  loop:
+    - { regexp: '^memory_limit =', line: 'memory_limit = {{ php_memory_limit }}' }
+    - { regexp: '^;date.timezone =', line: 'date.timezone = Africa/Lome' }
+  ignore_errors: yes
+
+# ============================================================================
+# ACTIVATION MODULES PHP
+# ============================================================================
+
+- name: "🔧 Activation modules PHP requis"
+  command: "phpenmod {{ item }}"
+  loop:
+    - mbstring
+    - gd
+    - curl
+    - xml
+    - zip
+    - intl
+    - bcmath
+    - gmp
+  changed_when: false
+  ignore_errors: yes
+
+- name: "✅ Configuration PHP appliquée"
+  debug:
+    msg:
+      - "Memory limit     : {{ php_memory_limit }}"
+      - "Upload max       : {{ php_upload_max_filesize }}"
+      - "Max execution    : {{ php_max_execution_time }}s"
+      - "OPcache          : Activé"

@@ -1,0 +1,64 @@
+[general]
+static=yes
+writeprotect=no
+clearglobalvars=no
+
+[globals]
+ALERT_MESSAGE=Alerte critique détectée sur l infrastructure Germe Tech
+
+; ===============================================
+; CONTEXTE ALERTS - Appels d'alerte automatiques
+; ===============================================
+[alerts]
+; Extension pour recevoir les alertes critiques
+exten => {{ alert_extension }},1,NoOp(Incoming Alert Call)
+  same => n,Answer()
+  same => n,Wait(1)
+  same => n,Playback(beep)
+  same => n,Wait(1)
+  same => n,SayAlpha(ALERT)
+  same => n,Wait(1)
+  same => n,SayAlpha(CRITICAL)
+  same => n,Wait(1)
+  same => n,Playback(beep)
+  same => n,Wait(2)
+  same => n,Playback(vm-goodbye)
+  same => n,Wait(1)
+  same => n,Hangup()
+
+; Route générique pour autres extensions
+exten => _X.,1,NoOp(Call to ${EXTEN})
+  same => n,Dial(SIP/${EXTEN},30)
+  same => n,Hangup()
+
+; ===============================================
+; CONTEXTE INTERNAL - Extensions de test
+; ===============================================
+[internal]
+; Extension admin pour tests
+exten => {{ admin_extension }},1,NoOp(Admin Test Extension)
+  same => n,Answer()
+  same => n,Playback(hello-world)
+  same => n,Wait(2)
+  same => n,SayDigits({{ admin_extension }})
+  same => n,Wait(1)
+  same => n,Playback(vm-goodbye)
+  same => n,Hangup()
+
+; Echo test - pour tester la qualité audio
+exten => {{ echo_extension }},1,NoOp(Echo Test)
+  same => n,Answer()
+  same => n,Playback(demo-echotest)
+  same => n,Echo()
+  same => n,Hangup()
+
+; Voicemail test
+exten => 700,1,NoOp(Voicemail Test)
+  same => n,Answer()
+  same => n,Playback(vm-intro)
+  same => n,Wait(2)
+  same => n,Hangup()
+
+; Appel vers extension alerts (pour test manuel)
+exten => 100,1,NoOp(Manual Alert Test)
+  same => n,Goto(alerts,{{ alert_extension }},1)

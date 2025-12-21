@@ -1,0 +1,96 @@
+---
+# ============================================================================
+# ÉTAPE 6 : CONFIGURATION APACHE
+# VirtualHost et modules
+# ============================================================================
+
+# ============================================================================
+# ACTIVATION MODULES APACHE
+# ============================================================================
+
+- name: "🔧 Activation modules Apache requis"
+  apache2_module:
+    name: "{{ item }}"
+    state: present
+  loop:
+    - rewrite
+    - headers
+    - env
+    - dir
+    - mime
+  notify: restart apache2
+
+# ============================================================================
+# CONFIGURATION PORT
+# ============================================================================
+
+- name: "🔌 Configuration port Apache"
+  lineinfile:
+    path: /etc/apache2/ports.conf
+    regexp: '^Listen 80'
+    line: "Listen {{ nextcloud_http_port }}"
+    backup: yes
+  notify: restart apache2
+  when: nextcloud_http_port != 80
+
+# ============================================================================
+# CRÉATION VIRTUALHOST
+# ============================================================================
+
+- name: "📄 Déploiement VirtualHost Nextcloud"
+  template:
+    src: nextcloud.conf.j2
+    dest: /etc/apache2/sites-available/nextcloud.conf
+    owner: root
+    group: root
+    mode: '0644'
+  notify: reload apache2
+
+- name: "🔗 Activation site Nextcloud"
+  file:
+    src: /etc/apache2/sites-available/nextcloud.conf
+    dest: /etc/apache2/sites-enabled/nextcloud.conf
+    state: link
+  notify: reload apache2
+
+- name: "❌ Désactivation site par défaut"
+  file:
+    path: /etc/apache2/sites-enabled/000-default.conf
+    state: absent
+  notify: reload apache2
+
+# ============================================================================
+# VALIDATION CONFIGURATION
+# ============================================================================
+
+- name: "✅ Test configuration Apache"
+  command: apache2ctl configtest
+  register: apache_test
+  changed_when: false
+  failed_when: false
+
+- name: "⚠️  Avertissement configuration Apache"
+  debug:
+    msg: "{{ apache_test.stderr }}"
+  when: apache_test.rc != 0 and apache_test.stderr != ""
+
+# ============================================================================
+# REDÉMARRAGE FINAL
+# ============================================================================
+
+- name: "🔄 Redémarrage Apache"
+  systemd:
+    name: apache2
+    state: restarted
+    enabled: yes
+
+- name: "⏸️  Pause démarrage complet (3 secondes)"
+  pause:
+    seconds: 3
+
+- name: "✅ Apache configuré"
+  debug:
+    msg:
+      - "Port        : {{ nextcloud_http_port }}"
+      - "VirtualHost : /etc/apache2/sites-available/nextcloud.conf"
+      - "Statut      : ✅ Actif"

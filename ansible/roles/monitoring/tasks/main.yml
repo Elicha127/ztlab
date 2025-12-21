@@ -1,0 +1,74 @@
+---
+    - name: Check if node_exporter binary exists
+      stat:
+        path: /opt/node_exporter/node_exporter
+      register: node_exporter_bin
+
+    - name: Create installation directory
+      file:
+        path: /opt/node_exporter
+        state: directory
+        mode: '0755'
+      when: not node_exporter_bin.stat.exists
+      become: yes
+
+    - name: Download Node Exporter archive
+      get_url:
+        url: https://github.com/prometheus/node_exporter/releases/download/v1.8.1/node_exporter-1.8.1.linux-amd64.tar.gz
+        dest: /tmp/node_exporter.tar.gz
+      when: not node_exporter_bin.stat.exists
+      become: yes
+
+    - name: Extract Node Exporter
+      unarchive:
+        src: /tmp/node_exporter.tar.gz
+        dest: /tmp/
+        remote_src: yes
+      when: not node_exporter_bin.stat.exists
+      become: yes
+
+    - name: Move binary to /opt/node_exporter
+      copy:
+        src: /tmp/node_exporter-1.8.1.linux-amd64/node_exporter
+        dest: /opt/node_exporter/node_exporter
+        mode: '0755'
+        remote_src: yes
+      when: not node_exporter_bin.stat.exists
+      become: yes
+
+    - name: Create node_exporter user
+      user:
+        name: node_exporter
+        shell: /bin/false
+        create_home: no
+        system: yes
+      become: yes
+
+    - name: Create systemd service file
+      copy:
+        dest: /etc/systemd/system/node_exporter.service
+        content: |
+          [Unit]
+          Description=Node Exporter
+          After=network.target
+
+          [Service]
+          User=node_exporter
+          Group=node_exporter
+          ExecStart=/opt/node_exporter/node_exporter --web.listen-address=:9100
+          Restart=always
+
+          [Install]
+          WantedBy=multi-user.target
+      become: yes
+
+    - name: Reload systemd
+      command: systemctl daemon-reload
+      become: yes
+
+    - name: Enable and start Node Exporter
+      systemd:
+        name: node_exporter
+        enabled: yes
+        state: started
+      become: yes

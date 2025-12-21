@@ -1,6 +1,21 @@
----
+# ansible/group_vars/windows.yml
 ansible_connection: winrm
-ansible_winrm_transport: basic
+ansible_shell_type: powershell
 ansible_port: 5985
+ansible_become: false
+
+# WinRM auth and timeouts
+ansible_winrm_transport: basic
 ansible_winrm_scheme: http
 ansible_winrm_server_cert_validation: ignore
+ansible_winrm_operation_timeout_sec: 60
+ansible_winrm_read_timeout_sec: 120
+
+# AD context
+dns_domain_name: "germe-tech.local"
+domain_netbios_name: "GERME-TECH"
+domain_admin_user: "GERME-TECH\\Administrator"
+domain_admin_password: "Elicha7agbo"
+
+# Windows exporter port (pour plus tard)
+windows_exporter_port: 9182

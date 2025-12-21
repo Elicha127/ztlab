@@ -1,0 +1,25 @@
+[modules]
+autoload=yes
+
+; ===== Modules essentiels =====
+load => res_musiconhold.so
+load => chan_sip.so
+load => app_dial.so
+load => app_echo.so
+load => app_playback.so
+load => app_voicemail.so
+load => app_directory.so
+load => func_callerid.so
+load => pbx_config.so
+
+; ===== Codecs =====
+{% for codec in codecs %}
+load => codec_{{ codec }}.so
+{% endfor %}
+
+; ===== Modules à ne pas charger =====
+noload => chan_skinny.so
+noload => chan_mgcp.so
+noload => chan_alsa.so
+noload => chan_oss.so
+noload => chan_console.so

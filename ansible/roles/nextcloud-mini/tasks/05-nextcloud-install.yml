@@ -1,0 +1,152 @@
+---
+# ============================================================================
+# ÉTAPE 5 : INSTALLATION NEXTCLOUD
+# Extraction archive et configuration
+# ============================================================================
+
+# ============================================================================
+# RÉCUPÉRATION ARCHIVE
+# ============================================================================
+
+- name: "📦 Récupération archive Nextcloud"
+  block:
+    # Mode offline : copie depuis cache
+    - name: "Copie archive depuis cache (offline)"
+      copy:
+        src: "{{ cache_base_dir }}/archives/nextcloud-{{ nextcloud_version }}.tar.bz2"
+        dest: "/tmp/nextcloud.tar.bz2"
+        mode: '0644'
+      delegate_to: controller
+      when: offline_mode
+
+    # Mode online : téléchargement direct
+    - name: "Téléchargement archive (online)"
+      get_url:
+        url: "https://download.nextcloud.com/server/releases/nextcloud-{{ nextcloud_version }}.tar.bz2"
+        dest: "/tmp/nextcloud.tar.bz2"
+        timeout: "{{ download_timeout }}"
+      when: not offline_mode
+
+# ============================================================================
+# VÉRIFICATION INSTALLATION EXISTANTE
+# ============================================================================
+
+- name: "🔍 Vérification installation existante"
+  stat:
+    path: "{{ nextcloud_install_dir }}/version.php"
+  register: nc_existing
+
+- name: "⚠️  Nextcloud déjà présent - mode mise à jour"
+  debug:
+    msg: "Installation existante détectée, préservation des données"
+  when: nc_existing.stat.exists
+
+# ============================================================================
+# EXTRACTION ET INSTALLATION
+# ============================================================================
+
+- name: "📂 Extraction archive Nextcloud"
+  unarchive:
+    src: "/tmp/nextcloud.tar.bz2"
+    dest: "/var/www/"
+    remote_src: yes
+    owner: "{{ nextcloud_web_user }}"
+    group: "{{ nextcloud_web_group }}"
+    creates: "{{ nextcloud_install_dir }}/occ"
+  when: not nc_existing.stat.exists
+
+- name: "🔐 Configuration propriétaire application"
+  file:
+    path: "{{ nextcloud_install_dir }}"
+    owner: "{{ nextcloud_web_user }}"
+    group: "{{ nextcloud_web_group }}"
+    recurse: yes
+
+- name: "🔐 Configuration propriétaire répertoire data"
+  file:
+    path: "{{ nextcloud_data_dir }}"
+    owner: "{{ nextcloud_web_user }}"
+    group: "{{ nextcloud_web_group }}"
+    mode: '0770'
+    state: directory
+
+# ============================================================================
+# CONFIGURATION INITIALE NEXTCLOUD
+# ============================================================================
+
+- name: "⚙️  Installation Nextcloud via occ"
+  command: |
+    php {{ nextcloud_install_dir }}/occ maintenance:install \
+      --database=mysql \
+      --database-name={{ nextcloud_db_name }} \
+      --database-user={{ nextcloud_db_user }} \
+      --database-pass={{ nextcloud_db_password }} \
+      --database-host={{ nextcloud_db_host }} \
+      --admin-user={{ nextcloud_admin_user }} \
+      --admin-pass={{ nextcloud_admin_password }} \
+      --data-dir={{ nextcloud_data_dir }}
+  args:
+    creates: "{{ nextcloud_install_dir }}/config/config.php"
+  become_user: "{{ nextcloud_web_user }}"
+  no_log: true
+  register: nc_install
+
+- name: "✅ Installation Nextcloud"
+  debug:
+    msg: "{{ 'Nouvelle installation' if nc_install.changed else 'Configuration existante' }}"
+
+# ============================================================================
+# CONFIGURATION TRUSTED DOMAINS
+# ============================================================================
+
+- name: "🌐 Configuration domaines de confiance"
+  command: |
+    php {{ nextcloud_install_dir }}/occ config:system:set trusted_domains {{ item.index }} --value={{ item.domain }}
+  loop:
+    - { index: 0, domain: "localhost" }
+    - { index: 1, domain: "{{ ansible_default_ipv4.address }}" }
+    - { index: 2, domain: "{{ nextcloud_server_name }}" }
+    - { index: 3, domain: "{{ ansible_hostname }}" }
+  become_user: "{{ nextcloud_web_user }}"
+  changed_when: false
+
+# ============================================================================
+# OPTIMISATIONS
+# ============================================================================
+
+- name: "⚡ Activation mode maintenance"
+  command: php {{ nextcloud_install_dir }}/occ maintenance:mode --on
+  become_user: "{{ nextcloud_web_user }}"
+  changed_when: false
+
+- name: "⚡ Configuration paramètres additionnels"
+  command: |
+    php {{ nextcloud_install_dir }}/occ config:system:set {{ item.key }} --value={{ item.value }} --type={{ item.type }}
+  loop:
+    - { key: 'overwrite.cli.url', value: "http://{{ ansible_default_ipv4.address }}:{{ nextcloud_http_port }}", type: 'string' }
+    - { key: 'default_phone_region', value: 'TG', type: 'string' }
+  become_user: "{{ nextcloud_web_user }}"
+  changed_when: false
+  ignore_errors: yes
+
+- name: "⚡ Désactivation mode maintenance"
+  command: php {{ nextcloud_install_dir }}/occ maintenance:mode --off
+  become_user: "{{ nextcloud_web_user }}"
+  changed_when: false
+
+# ============================================================================
+# NETTOYAGE
+# ============================================================================
+
+- name: "🧹 Nettoyage fichiers temporaires"
+  file:
+    path: "/tmp/nextcloud.tar.bz2"
+    state: absent
+
+- name: "✅ Nextcloud installé et configuré"
+  debug:
+    msg:
+      - "Version         : {{ nextcloud_version }}"
+      - "Répertoire app  : {{ nextcloud_install_dir }}"
+      - "Répertoire data : {{ nextcloud_data_dir }}"
+      - "Compte admin    : {{ nextcloud_admin_user }}"

@@ -1,0 +1,28 @@
+<VirtualHost *:{{ nextcloud_http_port }}>
+    ServerName {{ nextcloud_server_name }}
+    ServerAdmin admin@{{ nextcloud_server_name }}
+    
+    DocumentRoot {{ nextcloud_install_dir }}
+    
+    <Directory {{ nextcloud_install_dir }}>
+        Require all granted
+        AllowOverride All
+        Options FollowSymLinks MultiViews
+        
+        <IfModule mod_dav.c>
+            Dav off
+        </IfModule>
+        
+        SetEnv HOME {{ nextcloud_install_dir }}
+        SetEnv HTTP_HOME {{ nextcloud_install_dir }}
+    </Directory>
+    
+    # Logs
+    ErrorLog ${APACHE_LOG_DIR}/nextcloud_error.log
+    CustomLog ${APACHE_LOG_DIR}/nextcloud_access.log combined
+    
+    # Optimisations
+    <IfModule mod_headers.c>
+        Header always set Strict-Transport-Security "max-age=15552000"
+    </IfModule>
+</VirtualHost>

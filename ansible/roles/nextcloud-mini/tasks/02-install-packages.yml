@@ -1,0 +1,108 @@
+---
+# ============================================================================
+# ÉTAPE 2 : INSTALLATION PAQUETS SYSTÈME
+# Installation Apache, PHP, MariaDB
+# ============================================================================
+
+- name: "📦 Mode installation : {{ 'OFFLINE (cache local)' if offline_mode else 'ONLINE (dépôts)' }}"
+  debug:
+    msg: "Méthode d'installation définie"
+
+# ============================================================================
+# MODE ONLINE : Installation depuis dépôts Ubuntu
+# ============================================================================
+
+- name: "📥 Installation paquets (mode online)"
+  when: not offline_mode
+  block:
+    - name: "Mise à jour cache APT"
+      apt:
+        update_cache: yes
+        cache_valid_time: 3600
+
+    - name: "Installation paquets système"
+      apt:
+        name:
+          - apache2
+          - libapache2-mod-php
+          - mariadb-server
+          - "php{{ php_version }}-fpm"
+          - "php{{ php_version }}-mysql"
+          - "php{{ php_version }}-gd"
+          - "php{{ php_version }}-curl"
+          - "php{{ php_version }}-xml"
+          - "php{{ php_version }}-zip"
+          - "php{{ php_version }}-mbstring"
+          - "php{{ php_version }}-intl"
+          - "php{{ php_version }}-bcmath"
+          - "php{{ php_version }}-gmp"
+          - "php{{ php_version }}-imagick"
+          - python3-pymysql
+          - bzip2
+        state: present
+      register: pkg_install_online
+
+# ============================================================================
+# MODE OFFLINE : Installation depuis cache local
+# ============================================================================
+
+- name: "📦 Installation paquets (mode offline)"
+  when: offline_mode
+  block:
+    - name: "Copie cache .deb depuis controller"
+      synchronize:
+        src: "{{ cache_base_dir }}/packages/"
+        dest: "/tmp/nextcloud-deb-cache/"
+        rsync_opts:
+          - "--ignore-existing"
+      delegate_to: controller
+
+    - name: "Installation paquets depuis cache local"
+      apt:
+        deb: "{{ item }}"
+        state: present
+      with_fileglob:
+        - "/tmp/nextcloud-deb-cache/*.deb"
+      register: pkg_install_offline
+      ignore_errors: yes
+
+    - name: "Résolution dépendances manquantes"
+      apt:
+        name: "{{ item }}"
+        state: present
+      loop:
+        - apache2
+        - mariadb-server
+        - "php{{ php_version }}"
+        - libapache2-mod-php
+      ignore_errors: yes
+
+# ============================================================================
+# DÉMARRAGE SERVICES
+# ============================================================================
+
+- name: "🔄 Démarrage et activation services"
+  systemd:
+    name: "{{ item }}"
+    state: started
+    enabled: yes
+  loop:
+    - apache2
+    - mariadb
+
+# ============================================================================
+# VALIDATION INSTALLATION
+# ============================================================================
+
+- name: "🔍 Vérification version PHP installée"
+  command: php -v
+  register: php_check
+  changed_when: false
+
+- name: "📊 Version PHP installée"
+  debug:
+    msg: "{{ php_check.stdout_lines[0] }}"
+
+- name: "✅ Paquets installés avec succès"
+  debug:
+    msg: "Installation terminée - Services démarrés"

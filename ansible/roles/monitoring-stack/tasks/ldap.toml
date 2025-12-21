@@ -1,0 +1,28 @@
+[[servers]]
+# Adresse de ton DC
+host = "192.168.30.10"
+port = 636
+use_ssl = true
+start_tls = false
+ssl_skip_verify = true
+
+# Compte de service Grafana (créé dans AD)
+bind_dn = "CN=grafana_bind,OU=ServiceAccounts,DC=germe-tech,DC=local"
+bind_password = "CHANGE_ME"
+
+# Recherche des utilisateurs
+search_filter = "(sAMAccountName=%s)"
+search_base_dns = ["DC=germe-tech,DC=local"]
+
+# Mapping des groupes AD vers des rôles Grafana
+[[servers.group_mappings]]
+group_dn = "CN=Monitoring,OU=Groups,DC=germe-tech,DC=local"
+org_role = "Admin"
+
+[[servers.group_mappings]]
+group_dn = "CN=DevOps,OU=Groups,DC=germe-tech,DC=local"
+org_role = "Editor"
+
+[[servers.group_mappings]]
+group_dn = "CN=Helpdesk,OU=Groups,DC=germe-tech,DC=local"
+org_role = "Viewer"

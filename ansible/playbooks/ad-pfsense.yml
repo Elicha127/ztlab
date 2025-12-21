@@ -1,0 +1,30 @@
+- name: Create pfSenseBind service account and FirewallAdmins group
+  hosts: gt-dc
+  tasks:
+    - name: Ensure FirewallAdmins group exists
+      win_shell: |
+        if (-not (Get-ADGroup -Filter "SamAccountName -eq 'FirewallAdmins'" -ErrorAction SilentlyContinue)) {
+          New-ADGroup -Name "FirewallAdmins" `
+                      -SamAccountName "FirewallAdmins" `
+                      -GroupScope Global `
+                      -GroupCategory Security `
+                      -Path "OU=Groups,DC=germe-tech,DC=local"
+        }
+      args:
+        executable: powershell
+
+    - name: Ensure pfSenseBind service account exists
+      win_shell: |
+        $pwd = ConvertTo-SecureString "PfSenseBind@2024!" -AsPlainText -Force
+        $user = Get-ADUser -Filter "SamAccountName -eq 'pfSenseBind'" -ErrorAction SilentlyContinue
+        if (-not $user) {
+          New-ADUser -Name "pfSenseBind" `
+                     -SamAccountName "pfSenseBind" `
+                     -Path "OU=ServiceAccounts,DC=germe-tech,DC=local" `
+                     -AccountPassword $pwd `
+                     -Enabled $true `
+                     -PasswordNeverExpires $true
+        }
+        Add-ADGroupMember -Identity "FirewallAdmins" -Members "pfSenseBind" -ErrorAction SilentlyContinue
+      args:
+        executable: powershell

@@ -1,0 +1,43 @@
+---
+# ============================================================================
+# VARIABLES DU RÔLE NEXTCLOUD-MINI
+# Configuration centralisée pour démonstration
+# ============================================================================
+
+# Version Nextcloud à déployer
+nextcloud_version: "28.0.1"
+
+# Chemins d'installation
+nextcloud_install_dir: "/var/www/nextcloud"
+nextcloud_data_dir: "/var/www/nextcloud-data"
+
+# Configuration réseau
+nextcloud_http_port: 8080
+nextcloud_server_name: "nextcloud.lan.local"
+
+# Base de données MariaDB
+nextcloud_db_host: "localhost"
+nextcloud_db_name: "nextcloud_db"
+nextcloud_db_user: "nextcloud_user"
+nextcloud_db_password: "NextcloudPass2024!"
+mysql_root_password: "RootNextcloud2024!"
+
+# Compte administrateur Nextcloud
+nextcloud_admin_user: "admin"
+nextcloud_admin_password: "admin123"
+
+# Utilisateur système (Apache)
+nextcloud_web_user: "www-data"
+nextcloud_web_group: "www-data"
+
+# Configuration PHP
+php_memory_limit: "512M"
+php_upload_max_filesize: "512M"
+php_post_max_size: "512M"
+php_max_execution_time: "300"
+
+# Cache local (sur zt-controller)
+cache_base_dir: "/opt/ansible-cache/nextcloud"
+
+# Mode offline (à activer le jour de la démo sans Internet)
+offline_mode: false

@@ -1,0 +1,49 @@
+---
+# Configuration réseau
+static_ip: "192.168.40.20"
+subnet_mask: "255.255.255.0"
+default_gateway: "192.168.40.1"
+dns_servers:
+  - "192.168.30.10"  # gt-dc
+  - "8.8.8.8"
+
+# Configuration serveur
+hostname: "gt-voip"
+domain: "germe-tech.local"
+fqdn: "gt-voip.germe-tech.local"
+
+# Version Asterisk
+asterisk_version: "20"  # Asterisk 20 LTS
+
+# Comptes SIP pour alertes
+sip_accounts:
+  - username: "alerting"
+    password: "admin"
+    context: "alerts"
+    description: "Compte pour appels d'alerte critiques"
+  - username: "monitoring"
+    password: "admin"
+    context: "alerts"
+    description: "Compte pour supervision"
+  - username: "admin"
+    password: "admin"
+    context: "internal"
+    description: "Compte administrateur pour tests"
+
+# Extensions
+alert_extension: "100"
+admin_extension: "200"
+echo_extension: "600"
+
+# Ports
+sip_port: 5060
+rtp_start: 10000
+rtp_end: 20000
+webhook_port: 5000
+ssh_port: 22
+
+# Codecs autorisés
+codecs:
+  - "ulaw"
+  - "alaw"
+  - "gsm"

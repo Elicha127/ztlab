@@ -1,0 +1,8 @@
+- hosts: gt-voip
+  become: yes
+  tasks:
+    - name: Add zt-controller public key
+      authorized_key:
+        user: elicha_voip   # remplace par ton utilisateur sur gt-voip
+        state: present
+        key: "{{ lookup('file', '~/.ssh/id_ed25519.pub') }}"

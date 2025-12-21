@@ -1,30 +1,25 @@
 ---
-- name: Create Temp folder
+- name: Create folder for windows_exporter
   win_file:
-    path: C:\Temp
+    path: C:\windows_exporter
     state: directory
 
-- name: Download Windows Exporter MSI
-  win_get_url:
-    url: https://github.com/prometheus-community/windows_exporter/releases/download/v0.25.1/windows_exporter-0.25.1-amd64.msi
-    dest: C:\Temp\windows_exporter.msi
+- name: Copy windows_exporter binary (offline mode)
+  win_copy:
+    src: windows_exporter.exe
+    dest: C:\windows_exporter\windows_exporter.exe
 
-- name: Install Windows Exporter
-  win_package:
-    path: C:\Temp\windows_exporter.msi
-    state: present
-    arguments: ENABLED_COLLECTORS=cpu,cs,logical_disk,net,os,system,memory
-
-- name: Ensure Windows Exporter service is started
+- name: Ensure Windows Exporter service is present and running
   win_service:
     name: windows_exporter
+    path: '"C:\windows_exporter\windows_exporter.exe" --web.listen-address=:{{ windows_exporter_port }}'
     start_mode: auto
     state: started
 
-- name: Open firewall port 9182
+- name: Ensure firewall rule for Windows Exporter
   win_firewall_rule:
     name: "Windows Exporter"
-    localport: 9182
+    localport: "{{ windows_exporter_port }}"
     action: allow
     direction: in
     protocol: tcp

@@ -1,3 +1,27 @@
+#---
+# Déployer la stack de monitoring (Prometheus + Grafana + Loki + Alertmanager)
+# roles/monitoring/tasks/main.yml
+#- import_tasks: node_exporter.yml
+
+#- name: Deploy monitoring stack on zt-monitor
+ # hosts: monitoring
+#  become: yes
+  #roles:
+ #   - monitoring-stack
+
+# Installer Node Exporter sur TOUTES les machines Linux
+#- name: Deploy Node Exporter on Linux hosts
+ # hosts: controller,bastion,apps,monitoring,client,linux
+#  become: yes
+  #roles:
+ #   - monitoring
+
+# Installer Windows Exporter sur toutes les machines Windows
+#- name: Deploy Windows Exporter on Windows hosts
+#  hosts: windows
+ # roles:
+#    - windows-exporter
+
 ---
 # Déployer la stack de monitoring (Prometheus + Grafana + Loki + Alertmanager)
 - name: Deploy monitoring stack on zt-monitor
@@ -6,7 +30,7 @@
   roles:
     - monitoring-stack
 
-# Installer Node Exporter sur TOUTES les machines Linux
+# Installer Node Exporter sur toutes les machines Linux
 - name: Deploy Node Exporter on Linux hosts
   hosts: controller,bastion,apps,monitoring,client,linux
   become: yes
