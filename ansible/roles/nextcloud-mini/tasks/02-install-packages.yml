@@ -50,7 +50,7 @@
   when: offline_mode
   block:
     - name: "Copie cache .deb depuis controller"
-      synchronize:
+      ansible.posix.synchronize:
         src: "{{ cache_base_dir }}/packages/"
         dest: "/tmp/nextcloud-deb-cache/"
         rsync_opts:
