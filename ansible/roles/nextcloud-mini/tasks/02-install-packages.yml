@@ -49,13 +49,22 @@
 - name: "📦 Installation paquets (mode offline)"
   when: offline_mode
   block:
+    #- name: "Copie cache .deb depuis controller"
+      #ansible.posix.synchronize:
+        #src: "{{ cache_base_dir }}/packages/"
+        #dest: "/tmp/nextcloud-deb-cache/"
+        #rsync_opts:
+          #- "--ignore-existing"
+      #delegate_to: controller
+
     - name: "Copie cache .deb depuis controller"
-      ansible.posix.synchronize:
-        src: "{{ cache_base_dir }}/packages/"
-        dest: "/tmp/nextcloud-deb-cache/"
-        rsync_opts:
-          - "--ignore-existing"
-      delegate_to: controller
+      copy:
+        src: "/opt/ansible-cache/*.deb"
+        dest: "/tmp/"
+        mode: '0644'
+
+
+
 
     - name: "Installation paquets depuis cache local"
       apt:
