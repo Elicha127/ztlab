@@ -7,6 +7,7 @@
 # Version Nextcloud à déployer
 nextcloud_version: "28.0.1"
 
+offline_mode: true
 # Chemins d'installation
 nextcloud_install_dir: "/var/www/nextcloud"
 nextcloud_data_dir: "/var/www/nextcloud-data"
@@ -38,6 +39,10 @@ php_max_execution_time: "300"
 
 # Cache local (sur zt-controller)
 cache_base_dir: "/opt/ansible-cache/nextcloud"
+nextcloud_local_cache: "/opt/offline-cache/nextcloud/nextcloud-{{ nextcloud_version }}.zip"
+nextcloud_remote_tmp: "/tmp/nextcloud-{{ nextcloud_version }}.zip"
 
 # Mode offline (à activer le jour de la démo sans Internet)
 offline_mode: false
+
+

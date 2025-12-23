@@ -4,6 +4,18 @@
 # Optimisation paramètres pour Nextcloud
 # ============================================================================
 
+
+- name: "🔍 Vérification présence php.ini Apache"
+  stat:
+    path: "/etc/php/{{ php_version }}/apache2/php.ini"
+  register: php_ini_apache
+
+- name: "❌ Arrêt si php.ini Apache absent"
+  fail:
+    msg: "php.ini Apache introuvable pour PHP {{ php_version }}"
+  when: not php_ini_apache.stat.exists
+
+
 - name: "📝 Configuration paramètres PHP (Apache)"
   lineinfile:
     path: "/etc/php/{{ php_version }}/apache2/php.ini"

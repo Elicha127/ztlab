@@ -4,9 +4,8 @@
 # Validation environnement avant déploiement
 # ============================================================================
 
-- name: "🔍 Détection version PHP disponible"
-  shell: |
-    apt-cache policy php | grep -oP 'Candidate: \K[0-9]+\.[0-9]+' | head -1
+- name: "🔍 Détection version PHP installée"
+  shell: php -r 'echo PHP_MAJOR_VERSION.".".PHP_MINOR_VERSION;'
   register: php_version_detect
   changed_when: false
   failed_when: false
@@ -15,9 +14,10 @@
   set_fact:
     php_version: "{{ php_version_detect.stdout | default('8.1') }}"
 
-- name: "✅ Version PHP ciblée : {{ php_version }}"
+- name: "✅ Version PHP ciblée"
   debug:
     msg: "PHP {{ php_version }} sera utilisé"
+
 
 # ============================================================================
 # VÉRIFICATION CACHE OFFLINE (si mode offline activé)

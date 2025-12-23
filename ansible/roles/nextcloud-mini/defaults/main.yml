@@ -7,8 +7,18 @@
 # Version PHP (détection automatique si non spécifiée)
 php_version: "8.1"
 
-# Mode offline par défaut
-offline_mode: false
+nextcloud_version: "28.0.1"
 
-# Timeout pour téléchargements
-download_timeout: 300
+offline_mode: true
+# Cache offline (zt-controller)
+nextcloud_cache_dir: "/opt/offline-cache/nextcloud"
+nextcloud_archive: "nextcloud-{{ nextcloud_version }}.zip"
+nextcloud_cache_path: "{{ nextcloud_cache_dir }}/{{ nextcloud_archive }}"
+
+# Côté zt-app
+nextcloud_remote_tmp: "/tmp/{{ nextcloud_archive }}"
+
+# Installation
+nextcloud_install_dir: "/var/www/nextcloud"
+nextcloud_web_user: "www-data"
+nextcloud_web_group: "www-data"

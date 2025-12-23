@@ -1,221 +1,31 @@
 ---
-# ============================================================================
-# ROLLBACK COMPLET NEXTCLOUD
-# Suppression totale pour permettre nouveau déploiement
-# ============================================================================
+- name: Rollback Nextcloud - suppression applicative
+  hosts: zt-app
+  become: true
 
-- name: "🗑️  Rollback Nextcloud complet"
-  hosts: apps
-  gather_facts: yes
-  become: yes
-  
   vars:
-    # Reprendre les mêmes variables que le rôle
     nextcloud_install_dir: "/var/www/nextcloud"
     nextcloud_data_dir: "/var/www/nextcloud-data"
-    nextcloud_db_name: "nextcloud_db"
-    nextcloud_db_user: "nextcloud_user"
-    mysql_root_password: "RootNextcloud2024!"
-    nextcloud_http_port: 8080
-
-  pre_tasks:
-    - name: "⚠️  Confirmation suppression"
-      pause:
-        prompt: |
-          
-          ═══════════════════════════════════════════════════════════════
-          ⚠️  ATTENTION - OPÉRATION DESTRUCTIVE
-          ═══════════════════════════════════════════════════════════════
-          
-          Cette opération va SUPPRIMER définitivement :
-            • Application Nextcloud complète
-            • Base de données {{ nextcloud_db_name }}
-            • Tous les fichiers utilisateurs
-            • Configuration Apache VirtualHost
-            • Fichiers temporaires
-          
-          Serveur cible : {{ inventory_hostname }}
-          
-          ═══════════════════════════════════════════════════════════════
-          
-          Appuyez sur ENTRÉE pour confirmer ou CTRL+C pour annuler
-      delegate_to: localhost
-      run_once: yes
 
   tasks:
-    # ========================================================================
-    # ARRÊT DES SERVICES
-    # ========================================================================
-    
-    - name: "🛑 Arrêt service Apache2"
-      systemd:
+
+    - name: "🛑 Arrêt Apache"
+      service:
         name: apache2
         state: stopped
-      ignore_errors: yes
 
-    - name: "🛑 Arrêt service MariaDB"
-      systemd:
-        name: mariadb
-        state: stopped
-      ignore_errors: yes
-
-    # ========================================================================
-    # SUPPRESSION CONFIGURATION APACHE
-    # ========================================================================
-    
-    - name: "🗑️  Suppression VirtualHost Nextcloud"
-      file:
-        path: "{{ item }}"
-        state: absent
-      loop:
-        - /etc/apache2/sites-enabled/nextcloud.conf
-        - /etc/apache2/sites-available/nextcloud.conf
-
-    - name: "🔄 Restauration port Apache par défaut"
-      lineinfile:
-        path: /etc/apache2/ports.conf
-        regexp: "^Listen {{ nextcloud_http_port }}"
-        line: "Listen 80"
-      when: nextcloud_http_port != 80
-
-    - name: "🔗 Réactivation site par défaut Apache"
-      file:
-        src: /etc/apache2/sites-available/000-default.conf
-        dest: /etc/apache2/sites-enabled/000-default.conf
-        state: link
-      ignore_errors: yes
-
-    # ========================================================================
-    # SUPPRESSION BASE DE DONNÉES
-    # ========================================================================
-    
-    - name: "🔄 Redémarrage MariaDB pour suppression"
-      systemd:
-        name: mariadb
-        state: started
-      ignore_errors: yes
-
-    - name: "🗑️  Suppression utilisateur base de données"
-      mysql_user:
-        name: "{{ nextcloud_db_user }}"
-        state: absent
-        login_user: root
-        login_password: "{{ mysql_root_password }}"
-      ignore_errors: yes
-      no_log: true
-
-    - name: "🗑️  Suppression base de données Nextcloud"
-      mysql_db:
-        name: "{{ nextcloud_db_name }}"
-        state: absent
-        login_user: root
-        login_password: "{{ mysql_root_password }}"
-      ignore_errors: yes
-
-    # ========================================================================
-    # SUPPRESSION FICHIERS
-    # ========================================================================
-    
-    - name: "🗑️  Suppression répertoire application Nextcloud"
+    - name: "🧹 Suppression application Nextcloud"
       file:
         path: "{{ nextcloud_install_dir }}"
         state: absent
 
-    - name: "🗑️  Suppression répertoire données Nextcloud"
+    - name: "🧹 Suppression répertoire de données"
       file:
         path: "{{ nextcloud_data_dir }}"
         state: absent
 
-    - name: "🗑️  Suppression fichiers temporaires"
-      file:
-        path: "{{ item }}"
-        state: absent
-      loop:
-        - /tmp/nextcloud-install
-        - /tmp/nextcloud.tar.bz2
-        - /tmp/nextcloud-deb-cache
-
-    - name: "🗑️  Suppression logs Apache Nextcloud"
-      file:
-        path: "{{ item }}"
-        state: absent
-      loop:
-        - /var/log/apache2/nextcloud_error.log
-        - /var/log/apache2/nextcloud_access.log
-      ignore_errors: yes
-
-    - name: "🗑️  Suppression source APT locale (si mode offline)"
-      file:
-        path: /etc/apt/sources.list.d/nextcloud-local.list
-        state: absent
-
-    # ========================================================================
-    # REDÉMARRAGE SERVICES
-    # ========================================================================
-    
-    - name: "🔄 Redémarrage Apache2"
-      systemd:
-        name: apache2
-        state: restarted
-        enabled: yes
-      ignore_errors: yes
-
-    - name: "🔄 Redémarrage MariaDB"
-      systemd:
-        name: mariadb
-        state: restarted
-        enabled: yes
-      ignore_errors: yes
-
-    # ========================================================================
-    # VALIDATION SUPPRESSION
-    # ========================================================================
-    
-    - name: "✅ Vérification suppression application"
+    - name: "🧪 Vérification suppression"
       stat:
         path: "{{ nextcloud_install_dir }}"
-      register: app_check
+      register: nc_removed
 
-    - name: "✅ Vérification suppression données"
-      stat:
-        path: "{{ nextcloud_data_dir }}"
-      register: data_check
-
-    - name: "✅ Vérification suppression base de données"
-      command: |
-        mysql -u root -p{{ mysql_root_password }} \
-        -e "SHOW DATABASES LIKE '{{ nextcloud_db_name }}';"
-      register: db_check
-      changed_when: false
-      failed_when: false
-      no_log: true
-
-  post_tasks:
-    - name: "📊 Rapport de rollback"
-      debug:
-        msg:
-          - ""
-          - "╔═══════════════════════════════════════════════════════════════╗"
-          - "║                                                               ║"
-          - "║              ✅ ROLLBACK TERMINÉ AVEC SUCCÈS                  ║"
-          - "║                                                               ║"
-          - "╚═══════════════════════════════════════════════════════════════╝"
-          - ""
-          - "📊 Éléments supprimés :"
-          - "   • Application Nextcloud : {{ 'Oui ✅' if not app_check.stat.exists else 'Non ❌' }}"
-          - "   • Données utilisateurs  : {{ 'Oui ✅' if not data_check.stat.exists else 'Non ❌' }}"
-          - "   • Base de données       : {{ 'Oui ✅' if db_check.stdout == '' else 'Non ❌' }}"
-          - "   • Configuration Apache  : Oui ✅"
-          - "   • Fichiers temporaires  : Oui ✅"
-          - ""
-          - "🔄 Services actifs :"
-          - "   • Apache2  : Redémarré"
-          - "   • MariaDB  : Redémarré"
-          - ""
-          - "🎯 Système prêt pour nouveau déploiement"
-          - ""
-          - "Pour redéployer :"
-          - "   ansible-playbook playbooks/deploy-nextcloud.yml"
-          - ""
-      delegate_to: localhost
-      run_once: yes
